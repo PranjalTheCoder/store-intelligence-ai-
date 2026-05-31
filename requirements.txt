@@ -1,0 +1,30 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# Store Intelligence — Phase 1 Dependencies
+# Python 3.12 required
+# ─────────────────────────────────────────────────────────────────────────────
+
+# ── Computer Vision & Detection ───────────────────────────────────────────────
+ultralytics==8.3.40         # YOLOv8 — includes ByteTrack for Phase 2
+opencv-python-headless==4.11.0.86  # OpenCV without GUI (use opencv-python if you need preview window locally)
+numpy==1.26.4               # Required by ultralytics and OpenCV
+
+# ── API (Phase 3) — install now so environment is ready ──────────────────────
+fastapi==0.115.5
+uvicorn[standard]==0.32.1
+pydantic==2.9.2
+sqlalchemy==2.0.36
+
+# ── Data Processing ───────────────────────────────────────────────────────────
+pandas==2.2.3               # POS CSV loading
+python-dotenv==1.0.1        # Environment variable management
+
+# ── Geometry (Zone polygon testing — Phase 2) ────────────────────────────────
+shapely==2.0.6
+
+# ── Testing ───────────────────────────────────────────────────────────────────
+pytest==8.3.3
+pytest-cov==6.0.0
+httpx==0.28.0               # For FastAPI test client
+
+# ── Logging & Observability ───────────────────────────────────────────────────
+structlog==24.4.0
