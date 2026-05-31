@@ -22,6 +22,7 @@ Usage
 """
 
 from __future__ import annotations
+# from pathlib import Path
 
 import argparse
 import json
@@ -32,6 +33,11 @@ from pathlib import Path
 # ─────────────────────────────────────────────────────────────────────────────
 # Logging setup — must happen before any pipeline imports
 # ─────────────────────────────────────────────────────────────────────────────
+
+events_file = Path("outputs/events.jsonl")
+
+if events_file.exists():
+    events_file.unlink()
 
 from pipeline.config import LOG_FORMAT, LOG_DATE, LOG_LEVEL
 

@@ -23,6 +23,8 @@ Design notes:
 
 from __future__ import annotations
 from pipeline.tracker import VisitorTracker
+from pipeline.detector import PersonDetector
+from pipeline.event_engine import EventEngine
 import logging
 import time
 from pathlib import Path
@@ -104,7 +106,7 @@ class VideoProcessor:
         # Detector is created in run() so that any import/GPU errors
         # are surfaced at runtime with context, not at import time.
         self._detector: Optional[PersonDetector] = None
-
+        self.event_engine = EventEngine()
         logger.info(
             "VideoProcessor init | camera=%s | input=%s | output=%s",
             self.camera_id, self.input_path, self.output_path,
@@ -250,6 +252,19 @@ class VideoProcessor:
             # ── Detect ────────────────────────────────────────────────────
             detections: List[Detection] = self._detector.detect(frame, frame_num=frame_index)
             tracked_objects = self.tracker.update(detections)
+            for track in tracked_objects:
+
+                self.event_engine.process_track(
+                    track.track_id,
+                    track.centroid
+                )
+
+            for obj in tracked_objects:
+
+                print(
+                    f"Track ID={obj.track_id} "
+                    f"Centroid={obj.centroid}"
+                )
             self._total_detections += len(detections)
 
             # ── Annotate ──────────────────────────────────────────────────
