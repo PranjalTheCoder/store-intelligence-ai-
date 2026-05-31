@@ -22,7 +22,7 @@ Design notes:
 """
 
 from __future__ import annotations
-
+from pipeline.tracker import VisitorTracker
 import logging
 import time
 from pathlib import Path
@@ -128,6 +128,7 @@ class VideoProcessor:
         writer = self._open_writer(cap)
 
         self._detector = PersonDetector(camera_id=self.camera_id)
+        self.tracker = VisitorTracker()
         self._detector.warmup(frame_shape=(self._video_height, self._video_width, 3))
 
         logger.info(
@@ -248,10 +249,11 @@ class VideoProcessor:
 
             # ── Detect ────────────────────────────────────────────────────
             detections: List[Detection] = self._detector.detect(frame, frame_num=frame_index)
+            tracked_objects = self.tracker.update(detections)
             self._total_detections += len(detections)
 
             # ── Annotate ──────────────────────────────────────────────────
-            annotated = self._annotate_frame(frame.copy(), detections, frame_index)
+            annotated = self._annotate_frame(frame.copy(), tracked_objects, frame_index)
 
             # ── Write ─────────────────────────────────────────────────────
             writer.write(annotated)
@@ -286,7 +288,7 @@ class VideoProcessor:
 
         Draws:
           - Bounding box per detection
-          - Label: "P-? | conf" (placeholder until ByteTrack assigns IDs in Phase 2)
+          - Label: "ID-{obj.track_id} | conf" (placeholder until ByteTrack assigns IDs in Phase 2)
           - Entry line for CAM3
           - HUD with frame number + detection count
         """
@@ -315,7 +317,7 @@ class VideoProcessor:
 
         # Label: person ID placeholder + confidence
         # track_id will be populated by ByteTrack in Phase 2
-        person_label = f"P-{det.track_id}" if det.track_id is not None else "P-?"
+        person_label = f"ID-{det.track_id}" if det.track_id is not None else "P-?"
         label        = f"{person_label} | {det.confidence:.2f}"
 
         # Background rectangle for label readability
