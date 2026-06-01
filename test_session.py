@@ -1,10 +1,20 @@
-from app.repository import create_session
+# test_sessions.py
 
-create_session(
-    visitor_id="Customer-1",
-    entry_time="2026-04-10T20:00:00",
-    exit_time="2026-04-10T20:15:00",
-    duration_seconds=900
-)
+from app.database import SessionLocal
+from app.models import Session
 
-print("Session inserted")
+db = SessionLocal()
+
+sessions = db.query(Session).all()
+
+print(f"Total sessions: {len(sessions)}")
+
+for s in sessions:
+    print(
+        s.visitor_id,
+        s.entry_time,
+        s.exit_time,
+        s.duration_seconds
+    )
+
+db.close()

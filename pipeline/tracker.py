@@ -34,15 +34,10 @@ class TrackedObject:
 
 
 class ByteTrackInput:
-    """
-    Adapter object because Ultralytics ByteTrack expects:
-    results.conf
-    results.xywh
-    results.cls
-    """
 
     def __init__(self, detections):
 
+        xyxy = []
         xywh = []
         conf = []
         cls = []
@@ -54,20 +49,27 @@ class ByteTrackInput:
             w = x2 - x1
             h = y2 - y1
 
-            xywh.append(
-                [
-                    x1 + w / 2,
-                    y1 + h / 2,
-                    w,
-                    h
-                ]
-            )
+            xyxy.append([
+                x1,
+                y1,
+                x2,
+                y2
+            ])
+
+            xywh.append([
+                x1 + w / 2,
+                y1 + h / 2,
+                w,
+                h
+            ])
 
             conf.append(det.confidence)
-
-            # person class
             cls.append(0)
 
+        self.xyxy = np.array(
+            xyxy,
+            dtype=np.float32
+        )
 
         self.xywh = np.array(
             xywh,
@@ -84,7 +86,21 @@ class ByteTrackInput:
             dtype=np.float32
         )
 
+    def __len__(self):
+        return len(self.conf)
 
+    def __getitem__(self, idx):
+
+        obj = ByteTrackInput.__new__(
+            ByteTrackInput
+        )
+
+        obj.xyxy = self.xyxy[idx]
+        obj.xywh = self.xywh[idx]
+        obj.conf = self.conf[idx]
+        obj.cls = self.cls[idx]
+
+        return obj
 class VisitorTracker:
 
 
@@ -104,10 +120,11 @@ class VisitorTracker:
             fuse_score=True,
         )
 
-
+        # print(BYTETracker)
         self.tracker = BYTETracker(
-            args=args,
-            frame_rate=30
+            # args=args,
+            # frame_rate=30
+            args
         )
 
 
@@ -117,21 +134,53 @@ class VisitorTracker:
             return []
 
 
+        # tracker_input = []
+
+        # for det in detections:
+
+        #     x1, y1, x2, y2 = det.bbox_xyxy
+
+        #     tracker_input.append(
+        #         [
+        #             x1,
+        #             y1,
+        #             x2,
+        #             y2,
+        #             det.confidence,
+        #             0
+        #         ]
+        #     )
+
+        # tracker_input = np.array(
+        #     tracker_input,
+        #     dtype=np.float32
+        # )
+
+        # tracks = self.tracker.update(
+        #     tracker_input
+        # )
+        # print(type(bt_input))
+        # print(bt_input.xywh)
+        # print(bt_input.conf)
+        # print(bt_input.cls)
+
+        # return []
+
         bt_input = ByteTrackInput(
             detections
         )
-
-
+        # print("TRACK INPUT")
+        # print(bt_input.xyxy.shape)
+        # print(bt_input.conf.shape)
         tracks = self.tracker.update(
             bt_input
         )
-
-
         results = []
 
 
         for track in tracks:
 
+            # print(track)
             # Ultralytics v8.3 returns ndarray:
             # [x1, y1, x2, y2, track_id, score, cls]
 
