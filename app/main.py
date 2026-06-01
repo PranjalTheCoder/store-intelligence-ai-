@@ -3,7 +3,12 @@ from fastapi import Depends
 from app.models import Session 
 from app.models import Event
 from app.repository import get_db
-from app.repository import get_all_sessions
+from app.repository import (
+    get_all_events,
+    get_all_sessions,
+    get_total_events,
+    get_total_sessions
+)
 
 app = FastAPI(
     title="Store Intelligence API",
@@ -198,3 +203,37 @@ def sessions():
         }
         for session in sessions
     ]
+
+@app.get("/analytics")
+def analytics():
+
+    events = get_all_events()
+    sessions = get_all_sessions()
+
+    entries = len(
+        [e for e in events if e.event_type == "ENTRY"]
+    )
+
+    exits = len(
+        [e for e in events if e.event_type == "EXIT"]
+    )
+
+    avg_duration = 0
+
+    if sessions:
+
+        avg_duration = sum(
+            s.duration_seconds
+            for s in sessions
+        ) / len(sessions)
+
+    return {
+        "total_events": len(events),
+        "total_sessions": len(sessions),
+        "entries": entries,
+        "exits": exits,
+        "avg_session_duration_seconds": round(
+            avg_duration,
+            2
+        )
+    }

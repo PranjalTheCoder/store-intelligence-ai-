@@ -88,3 +88,24 @@ def get_all_sessions():
 
     finally:
         db.close()
+
+def get_total_events():
+
+    db = SessionLocal()
+
+    try:
+        return db.query(Event).count()
+
+    finally:
+        db.close()
+
+
+def get_total_sessions():
+
+    db = SessionLocal()
+
+    try:
+        return db.query(Session).count()
+
+    finally:
+        db.close()
