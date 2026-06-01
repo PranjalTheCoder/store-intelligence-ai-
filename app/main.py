@@ -93,3 +93,53 @@ def funnel(
         "exit_count": exits,
         "drop_off": entries - exits
     }
+
+@app.get("/visitors")
+def visitors(
+    db: Session = Depends(get_db)
+):
+
+    events = db.query(Event).all()
+
+    visitor_ids = sorted(
+        list(
+            {
+                event.visitor_id
+                for event in events
+            }
+        )
+    )
+
+    return {
+        "total_visitors": len(visitor_ids),
+        "visitors": visitor_ids
+    }
+
+@app.get("/visitors/{visitor_id}")
+def visitor_details(
+    visitor_id: str,
+    db: Session = Depends(get_db)
+):
+
+    events = (
+        db.query(Event)
+        .filter(
+            Event.visitor_id == visitor_id
+        )
+        .all()
+    )
+
+    return {
+        "visitor_id": visitor_id,
+        "event_count": len(events),
+        "events": [
+            {
+                "event_type": event.event_type,
+                "camera_id": event.camera_id,
+                "zone_id": event.zone_id,
+                "timestamp": event.timestamp,
+                "confidence": event.confidence
+            }
+            for event in events
+        ]
+    }
