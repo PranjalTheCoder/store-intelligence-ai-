@@ -1,8 +1,9 @@
 from fastapi import FastAPI
 from fastapi import Depends
-from sqlalchemy.orm import Session 
+from app.models import Session 
 from app.models import Event
 from app.repository import get_db
+from app.repository import get_all_sessions
 
 app = FastAPI(
     title="Store Intelligence API",
@@ -143,3 +144,57 @@ def visitor_details(
             for event in events
         ]
     }
+
+
+@app.get("/dashboard")
+def dashboard(
+    db: Session = Depends(get_db)
+):
+
+    events = db.query(Event).all()
+
+    entries = sum(
+        1
+        for event in events
+        if event.event_type == "ENTRY"
+    )
+
+    exits = sum(
+        1
+        for event in events
+        if event.event_type == "EXIT"
+    )
+
+    unique_visitors = len(
+        {
+            event.visitor_id
+            for event in events
+        }
+    )
+
+    return {
+        "overview": {
+            "total_events": len(events),
+            "total_visitors": unique_visitors
+        },
+        "funnel": {
+            "entries": entries,
+            "exits": exits,
+            "drop_off": entries - exits
+        }
+    }
+
+@app.get("/sessions")
+def sessions():
+
+    sessions = get_all_sessions()
+
+    return [
+        {
+            "visitor_id": session.visitor_id,
+            "entry_time": session.entry_time,
+            "exit_time": session.exit_time,
+            "duration_seconds": session.duration_seconds
+        }
+        for session in sessions
+    ]

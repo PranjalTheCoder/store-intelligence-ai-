@@ -77,3 +77,14 @@ def create_session(
 
     finally:
         db.close()
+
+
+def get_all_sessions():
+
+    db = SessionLocal()
+
+    try:
+        return db.query(Session).all()
+
+    finally:
+        db.close()
