@@ -315,6 +315,8 @@ class VideoProcessor:
         for det in detections:
             self._draw_detection(frame, det)
 
+        self.event_engine.finalize_sessions()
+
         # Draw HUD overlay (top-left info bar)
         self._draw_hud(frame, frame_num, len(detections))
 

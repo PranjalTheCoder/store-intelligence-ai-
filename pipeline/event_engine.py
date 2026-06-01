@@ -180,3 +180,28 @@ class EventEngine:
             )
 
             f.write("\n")
+
+    def finalize_sessions(self):
+
+        end_time = datetime.utcnow()
+
+        for track_id, entry_time in self.active_sessions.items():
+
+            duration_seconds = (
+                end_time - entry_time
+            ).total_seconds()
+
+            create_session(
+                visitor_id=f"Customer-{track_id}",
+                entry_time=entry_time.isoformat(),
+                exit_time=end_time.isoformat(),
+                duration_seconds=duration_seconds
+            )
+
+            print(
+                f"AUTO SESSION CLOSED | "
+                f"Customer-{track_id} | "
+                f"{duration_seconds:.2f}s"
+            )
+
+        self.active_sessions.clear()
