@@ -1,18 +1,16 @@
 {
   "compilerOptions": {
+    "composite": true,
     "tsBuildInfoFile": "./node_modules/.tmp/tsconfig.app.tsbuildinfo",
     "target": "ES2020",
     "useDefineForClassFields": true,
-    "lib": ["ES2020", "DOM.Iterable", "DOM"],
-    "module": "esnext",
-    "types": ["vite/client"],
+    "lib": ["DOM", "DOM.Iterable", "ES2020"],
+    "module": "ESNext",
     "skipLibCheck": true,
 
     /* Bundler mode */
     "moduleResolution": "bundler",
     "allowImportingTsExtensions": true,
-    "verbatimModuleSyntax": true,
-    "moduleDetection": "force",
     "resolveJsonModule": true,
     "isolatedModules": true,
     "noEmit": true,
@@ -22,11 +20,10 @@
     "strict": true,
     "noUnusedLocals": true,
     "noUnusedParameters": true,
-    "erasableSyntaxOnly": true,
+    "noImplicitReturns": true,
     "fallthroughCasesInSwitch": true,
-    "noFallthroughCasesInSwitch": true,
 
-    /* Path Aliases mapping */
+    /* Path Aliases mapping matching Vite configuration */
     "baseUrl": ".",
     "paths": {
       "@/*": ["./src/*"]

@@ -1,14 +1,28 @@
-import React, { lazy, Suspense } from 'react';
-import { createBrowserRouter, Navigate } from 'react-router-dom';
-import { AppLayout } from '../layouts/AppLayout';
-import { Loader2 } from 'lucide-react';
+import React, { lazy, Suspense } from "react";
+import { createBrowserRouter, Navigate } from "react-router-dom";
+import { AppLayout } from "../layouts/AppLayout";
+import { Loader2 } from "lucide-react";
 
 // Lazy load feature modules to reduce initial bundle size
-const DashboardPage = lazy(() => import('../modules/dashboard/pages/DashboardPage'));
-const StoreMapPage = lazy(() => import('../modules/store-map/pages/StoreMapPage'));
-const VisitorsPage = lazy(() => import('../modules/visitors/pages/VisitorsPage'));
-const AnalyticsPage = lazy(() => import('../modules/analytics/pages/AnalyticsPage'));
-const EventsPage = lazy(() => import('../modules/events/pages/EventsPage'));
+const DashboardPage = lazy(
+  () => import("../modules/dashboard/pages/DashboardPage"),
+);
+const StoreMapPage = lazy(
+  () => import("../modules/store-map/pages/StoreMapPage"),
+);
+const VisitorsPage = lazy(
+  () => import("../modules/visitors/pages/VisitorsPage"),
+);
+const AnalyticsPage = lazy(
+  () => import("../modules/analytics/pages/AnalyticsPage"),
+);
+const EventsPage = lazy(() => import("../modules/events/pages/EventsPage"));
+const SessionsPage = lazy(
+  () => import("../modules/sessions/pages/SessionsPage"),
+);
+const SettingsPage = lazy(
+  () => import("../modules/settings/pages/SettingsPage"),
+);
 
 // Reusable suspense fallback
 const SuspenseFallback = () => (
@@ -19,7 +33,7 @@ const SuspenseFallback = () => (
 
 export const router = createBrowserRouter([
   {
-    path: '/',
+    path: "/",
     element: <AppLayout />,
     children: [
       {
@@ -27,7 +41,7 @@ export const router = createBrowserRouter([
         element: <Navigate to="/dashboard" replace />,
       },
       {
-        path: 'dashboard',
+        path: "dashboard",
         element: (
           <Suspense fallback={<SuspenseFallback />}>
             <DashboardPage />
@@ -35,7 +49,7 @@ export const router = createBrowserRouter([
         ),
       },
       {
-        path: 'store-map',
+        path: "store-map",
         element: (
           <Suspense fallback={<SuspenseFallback />}>
             <StoreMapPage />
@@ -43,7 +57,7 @@ export const router = createBrowserRouter([
         ),
       },
       {
-        path: 'visitors',
+        path: "visitors",
         element: (
           <Suspense fallback={<SuspenseFallback />}>
             <VisitorsPage />
@@ -51,7 +65,7 @@ export const router = createBrowserRouter([
         ),
       },
       {
-        path: 'analytics',
+        path: "analytics",
         element: (
           <Suspense fallback={<SuspenseFallback />}>
             <AnalyticsPage />
@@ -59,10 +73,26 @@ export const router = createBrowserRouter([
         ),
       },
       {
-        path: 'events',
+        path: "events",
         element: (
           <Suspense fallback={<SuspenseFallback />}>
             <EventsPage />
+          </Suspense>
+        ),
+      },
+      {
+        path: "sessions",
+        element: (
+          <Suspense fallback={<SuspenseFallback />}>
+            <SessionsPage />
+          </Suspense>
+        ),
+      },
+      {
+        path: "settings",
+        element: (
+          <Suspense fallback={<SuspenseFallback />}>
+            <SettingsPage />
           </Suspense>
         ),
       },
