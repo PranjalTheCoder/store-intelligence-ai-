@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 from fastapi import Depends
-from app.models import Session 
+from app.models import VisitorSession as Session 
 from app.models import Event
 from app.repository import get_db
 from app.repository import (
@@ -156,38 +156,23 @@ def dashboard(
     db: Session = Depends(get_db)
 ):
 
-    events = db.query(Event).all()
-
-    entries = sum(
-        1
-        for event in events
-        if event.event_type == "ENTRY"
-    )
-
-    exits = sum(
-        1
-        for event in events
-        if event.event_type == "EXIT"
-    )
-
-    unique_visitors = len(
-        {
-            event.visitor_id
-            for event in events
-        }
-    )
-
     return {
-        "overview": {
-            "total_events": len(events),
-            "total_visitors": unique_visitors
-        },
-        "funnel": {
-            "entries": entries,
-            "exits": exits,
-            "drop_off": entries - exits
-        }
+        "analytics": analytics(db),
+        "recent_events": [
+            {
+                "visitor_id": e.visitor_id,
+                "event_type": e.event_type,
+                "timestamp": e.timestamp
+            }
+            for e in (
+                db.query(Event)
+                .order_by(Event.id.desc())
+                .limit(10)
+                .all()
+            )
+        ]
     }
+
 
 @app.get("/sessions")
 def sessions():
@@ -205,35 +190,48 @@ def sessions():
     ]
 
 @app.get("/analytics")
-def analytics():
+def analytics(
+    db: Session = Depends(get_db)
+):
 
-    events = get_all_events()
-    sessions = get_all_sessions()
+    total_events = db.query(Event).count()
 
-    entries = len(
-        [e for e in events if e.event_type == "ENTRY"]
+    total_entries = (
+        db.query(Event)
+        .filter(Event.event_type == "ENTRY")
+        .count()
     )
 
-    exits = len(
-        [e for e in events if e.event_type == "EXIT"]
+    total_exits = (
+        db.query(Event)
+        .filter(Event.event_type == "EXIT")
+        .count()
     )
 
-    avg_duration = 0
+    total_sessions = (
+        db.query(Session)
+        .count()
+    )
+
+    avg_dwell_time = 0
+
+    sessions = db.query(Session).all()
 
     if sessions:
 
-        avg_duration = sum(
-            s.duration_seconds
-            for s in sessions
-        ) / len(sessions)
+        avg_dwell_time = (
+            sum(
+                s.duration_seconds
+                for s in sessions
+            )
+            / len(sessions)
+        )
 
     return {
-        "total_events": len(events),
-        "total_sessions": len(sessions),
-        "entries": entries,
-        "exits": exits,
-        "avg_session_duration_seconds": round(
-            avg_duration,
-            2
-        )
+        "total_events": total_events,
+        "entries": total_entries,
+        "exits": total_exits,
+        "sessions": total_sessions,
+        "average_dwell_time_seconds":
+            round(avg_dwell_time, 2)
     }

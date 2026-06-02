@@ -133,45 +133,10 @@ class VisitorTracker:
         if not detections:
             return []
 
-
-        # tracker_input = []
-
-        # for det in detections:
-
-        #     x1, y1, x2, y2 = det.bbox_xyxy
-
-        #     tracker_input.append(
-        #         [
-        #             x1,
-        #             y1,
-        #             x2,
-        #             y2,
-        #             det.confidence,
-        #             0
-        #         ]
-        #     )
-
-        # tracker_input = np.array(
-        #     tracker_input,
-        #     dtype=np.float32
-        # )
-
-        # tracks = self.tracker.update(
-        #     tracker_input
-        # )
-        # print(type(bt_input))
-        # print(bt_input.xywh)
-        # print(bt_input.conf)
-        # print(bt_input.cls)
-
-        # return []
-
         bt_input = ByteTrackInput(
             detections
         )
-        # print("TRACK INPUT")
-        # print(bt_input.xyxy.shape)
-        # print(bt_input.conf.shape)
+        
         tracks = self.tracker.update(
             bt_input
         )

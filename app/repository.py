@@ -2,7 +2,7 @@ from sqlalchemy.orm import Session
 
 from app.database import SessionLocal
 from app.models import Event
-from app.models import Session
+from app.models import VisitorSession
 
 
 def get_db():
@@ -63,7 +63,7 @@ def create_session(
 
     try:
 
-        session_obj = Session(
+        session_obj = VisitorSession(
             visitor_id=visitor_id,
             entry_time=entry_time,
             exit_time=exit_time,

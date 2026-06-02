@@ -29,7 +29,8 @@ import logging
 import time
 from pathlib import Path
 from typing import List, Optional
-
+from datetime import datetime
+from datetime import timedelta
 import cv2
 import numpy as np
 
@@ -140,11 +141,13 @@ class VideoProcessor:
 
         start_time = time.time()
 
+
         try:
             self._process_loop(cap, writer)
         except KeyboardInterrupt:
             logger.info("Processing interrupted by user.")
         finally:
+            self.event_engine.finalize_sessions()
             cap.release()
             writer.release()
             if self.show_preview:
@@ -256,7 +259,8 @@ class VideoProcessor:
 
                 self.event_engine.process_track(
                     track.track_id,
-                    track.centroid
+                    track.centroid,
+                    datetime.now()
                 )
 
             for obj in tracked_objects:
@@ -315,7 +319,6 @@ class VideoProcessor:
         for det in detections:
             self._draw_detection(frame, det)
 
-        self.event_engine.finalize_sessions()
 
         # Draw HUD overlay (top-left info bar)
         self._draw_hud(frame, frame_num, len(detections))

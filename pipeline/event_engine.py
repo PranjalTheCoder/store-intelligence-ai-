@@ -34,7 +34,8 @@ class EventEngine:
     def process_track(
         self,
         track_id,
-        centroid
+        centroid,
+        event_timestamp
     ):
 
         cx, cy = centroid
@@ -78,7 +79,7 @@ class EventEngine:
                 "visitor_id": f"Customer-{track_id}",
                 "event_type": "ENTRY",
                 "camera_id": "CAM3",
-                "timestamp": datetime.now().isoformat()
+                "timestamp": event_timestamp.isoformat()
             }
 
             self.generated_events.append(event)
@@ -116,7 +117,7 @@ class EventEngine:
                 "visitor_id": f"Customer-{track_id}",
                 "event_type": "EXIT",
                 "camera_id": "CAM3",
-                "timestamp": datetime.now().isoformat()
+                "timestamp": event_timestamp.isoformat()
             }
 
             self.generated_events.append(event)

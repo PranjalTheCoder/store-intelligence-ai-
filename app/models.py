@@ -24,7 +24,7 @@ class Event(Base):
 
     confidence = Column(Float)
 
-class Session(Base):
+class VisitorSession(Base):
 
     __tablename__ = "sessions"
 
