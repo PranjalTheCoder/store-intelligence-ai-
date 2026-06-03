@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import re
 import uuid
+import json
 from typing import Any, Dict, List, Optional
 from pydantic import BaseModel, Field, field_validator, model_validator
 
@@ -90,15 +91,20 @@ class IngestEventSchema(BaseModel):
         return self
 
 
-class IngestBatchSchema(BaseModel):
-    events: List[IngestEventSchema] = Field(..., max_length=500)
+class IngestBody(BaseModel):
+    events: List[dict] = Field(..., description="List of events (up to 500)")
 
-    @field_validator("events")
+    @model_validator(mode='before')
     @classmethod
-    def not_empty(cls, v):
-        if not v:
-            raise ValueError("events list cannot be empty")
-        return v
+    def intercept_string_payload(cls, data: Any) -> Any:
+        # Bulletproof: If a client (or Postman) accidentally sends the JSON wrapped 
+        # as a raw text string, parse it automatically on the fly.
+        if isinstance(data, str):
+            try:
+                return json.loads(data)
+            except Exception:
+                pass
+        return data
 
 
 class IngestErrorDetail(BaseModel):

@@ -16,8 +16,7 @@ import hashlib
 from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Request
-from pydantic import BaseModel, Field
-from pydantic import ValidationError
+from pydantic import BaseModel, Field, ValidationError, model_validator
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session as DBSession
 
