@@ -1,0 +1,140 @@
+{
+  "store_id": "STORE_1",
+  "store_name": "Purplle Store 1",
+  "layout_image": "Store 1 - layout.png",
+  "cameras": {
+    "CAM1": { "role": "zone",    "label": "CAM 1 - Zone (Left Side)"  },
+    "CAM2": { "role": "zone",    "label": "CAM 2 - Zone (Right Side)" },
+    "CAM3": { "role": "entry",   "label": "CAM 3 - Entry"             },
+    "CAM5": { "role": "billing", "label": "CAM 5 - Billing"           }
+  },
+  "open_hours": { "open": "10:00", "close": "21:00" },
+  "zones": [
+    {
+      "zone_id": "Z_FOH",
+      "zone_name": "FOH",
+      "sku_zone": "FOH",
+      "camera_id": "CAM1",
+      "zone_type": "FLOOR",
+      "is_revenue_zone": false,
+      "polygon": [[200,200],[900,200],[900,700],[200,700]]
+    },
+    {
+      "zone_id": "Z_SALM",
+      "zone_name": "Salm",
+      "sku_zone": "SALM",
+      "camera_id": "CAM1",
+      "zone_type": "SHELF",
+      "is_revenue_zone": true,
+      "polygon": [[50,50],[200,50],[200,150],[50,150]]
+    },
+    {
+      "zone_id": "Z_TFS",
+      "zone_name": "TFS",
+      "sku_zone": "TFS",
+      "camera_id": "CAM1",
+      "zone_type": "SHELF",
+      "is_revenue_zone": true,
+      "polygon": [[210,50],[360,50],[360,150],[210,150]]
+    },
+    {
+      "zone_id": "Z_MINIMALIST",
+      "zone_name": "Minimalist",
+      "sku_zone": "MINIMALIST",
+      "camera_id": "CAM1",
+      "zone_type": "SHELF",
+      "is_revenue_zone": true,
+      "polygon": [[530,50],[680,50],[680,150],[530,150]]
+    },
+    {
+      "zone_id": "Z_AQUALOGICA",
+      "zone_name": "Aqualogica",
+      "sku_zone": "AQUALOGICA",
+      "camera_id": "CAM1",
+      "zone_type": "SHELF",
+      "is_revenue_zone": true,
+      "polygon": [[690,50],[840,50],[840,150],[690,150]]
+    },
+    {
+      "zone_id": "Z_FOXTALE",
+      "zone_name": "Foxtale",
+      "sku_zone": "FOXTALE",
+      "camera_id": "CAM1",
+      "zone_type": "SHELF",
+      "is_revenue_zone": true,
+      "polygon": [[850,50],[990,50],[990,150],[850,150]]
+    },
+    {
+      "zone_id": "Z_JC",
+      "zone_name": "JC",
+      "sku_zone": "JC",
+      "camera_id": "CAM1",
+      "zone_type": "SHELF",
+      "is_revenue_zone": true,
+      "polygon": [[1010,50],[1120,50],[1120,150],[1010,150]]
+    },
+    {
+      "zone_id": "Z_FRAGRANCE",
+      "zone_name": "Fragrance",
+      "sku_zone": "FRAGRANCE",
+      "camera_id": "CAM1",
+      "zone_type": "SHELF",
+      "is_revenue_zone": true,
+      "polygon": [[280,300],[420,300],[420,500],[280,500]]
+    },
+    {
+      "zone_id": "Z_MAKEUP_UNIT",
+      "zone_name": "Makeup Unit",
+      "sku_zone": "MAKEUP",
+      "camera_id": "CAM2",
+      "zone_type": "DISPLAY",
+      "is_revenue_zone": true,
+      "polygon": [[550,280],[820,280],[820,560],[550,560]]
+    },
+    {
+      "zone_id": "Z_LOREAL",
+      "zone_name": "L'Oreal",
+      "sku_zone": "LOREAL",
+      "camera_id": "CAM2",
+      "zone_type": "SHELF",
+      "is_revenue_zone": true,
+      "polygon": [[780,620],[930,620],[930,730],[780,730]]
+    },
+    {
+      "zone_id": "Z_MENS",
+      "zone_name": "Mens",
+      "sku_zone": "MENS",
+      "camera_id": "CAM2",
+      "zone_type": "SHELF",
+      "is_revenue_zone": true,
+      "polygon": [[620,620],[770,620],[770,730],[620,730]]
+    },
+    {
+      "zone_id": "Z_MARS_NYBAE",
+      "zone_name": "Mars + Nybae",
+      "sku_zone": "MARS_NYBAE",
+      "camera_id": "CAM2",
+      "zone_type": "SHELF",
+      "is_revenue_zone": true,
+      "polygon": [[460,620],[610,620],[610,730],[460,730]]
+    },
+    {
+      "zone_id": "Z_BEAUTY",
+      "zone_name": "Beauty",
+      "sku_zone": "BEAUTY",
+      "camera_id": "CAM2",
+      "zone_type": "SHELF",
+      "is_revenue_zone": true,
+      "polygon": [[940,620],[1070,620],[1070,730],[940,730]]
+    },
+    {
+      "zone_id": "Z_CASH_COUNTER",
+      "zone_name": "Cash Counter",
+      "sku_zone": "BILLING",
+      "camera_id": "CAM5",
+      "zone_type": "BILLING",
+      "is_revenue_zone": true,
+      "polygon": [[900,200],[1100,200],[1100,500],[900,500]]
+    }
+  ]
+}

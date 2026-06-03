@@ -1,36 +1,24 @@
-============================================================================
-Store Intelligence
-Python 3.12
-============================================================================
----------------- Computer Vision ----------------
+# API framework
+fastapi>=0.110.0
+uvicorn[standard]>=0.29.0
+pydantic>=2.6.0
 
-ultralytics==8.3.40
-opencv-python==4.11.0.86
-numpy==1.26.4
-lap>=0.5.12
+# Database
+sqlalchemy>=2.0.0
 
----------------- API & Database ----------------
+# Detection pipeline (install as needed)
+ultralytics>=8.2.0        # YOLOv8 + ByteTrack built-in
+opencv-python-headless>=4.9.0
+torch>=2.2.0
+torchvision>=0.17.0
 
-fastapi==0.115.5
-uvicorn[standard]==0.32.1
-pydantic==2.9.2
-sqlalchemy==2.0.41
+# Zone intelligence
+shapely>=2.0.0
 
----------------- Data Processing ----------------
+# Data processing
+pandas>=2.2.0
+numpy>=1.26.0
 
-pandas==2.2.3
-python-dotenv==1.0.1
-
----------------- Geometry ----------------
-
-shapely==2.0.6
-
----------------- Testing ----------------
-
-pytest==8.3.3
-pytest-cov==6.0.0
-httpx==0.28.0
-
----------------- Logging ----------------
-
-structlog==24.4.0
+# Utilities
+python-multipart>=0.0.9   # file uploads
+aiofiles>=23.2.1

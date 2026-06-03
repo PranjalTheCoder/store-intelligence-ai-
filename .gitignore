@@ -70,9 +70,13 @@ Thumbs.db
 # CCTV Dataset (DO NOT PUSH)
 # Hackathon rule: Do not upload videos
 # ============================================================
-
+data/
 data/clips/
 data/videos/
+resources/
+resources/store1
+resources/store2
+
 
 *.mp4
 *.avi

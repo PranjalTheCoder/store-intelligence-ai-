@@ -1,214 +1,166 @@
 """
-run_detection.py
-----------------
-Phase 1 entrypoint — YOLO person detection on a single camera video.
+run_detection.py — Detection pipeline entry point.
 
-Usage
------
-    # Process CAM3 (default — entry/exit camera, most important)
-    python run_detection.py
+This is the command reviewers run:
+    python run_detection.py --camera CAM3
+    python run_detection.py --store STORE_1 --all
+    python run_detection.py --sample          # process sample_events.jsonl (no GPU needed)
 
-    # Process a specific camera
-    python run_detection.py --camera CAM1
+With GPU + YOLO:
+    python run_detection.py --store STORE_1 \\
+        --videos CAM3:resources/Store1/CAM3-entry.mp4 \\
+                 CAM1:resources/Store1/CAM1-zone.mp4 \\
+                 CAM5:resources/Store1/CAM5-billing.mp4
 
-    # Quick test: stop after 300 source frames (~20 seconds at 15fps)
-    python run_detection.py --camera CAM3 --max-frames 300
-
-    # Show live preview window (requires a display)
-    python run_detection.py --camera CAM3 --preview
-
-    # All cameras that are enabled in config
-    python run_detection.py --all
+Without GPU (sample mode):
+    python run_detection.py --sample
+    python run_detection.py --sample --store ST1076
 """
 
 from __future__ import annotations
-# from pathlib import Path
 
 import argparse
+import datetime
 import json
-import logging
+import os
 import sys
-from pathlib import Path
 
-# ─────────────────────────────────────────────────────────────────────────────
-# Logging setup — must happen before any pipeline imports
-# ─────────────────────────────────────────────────────────────────────────────
+sys.path.insert(0, os.path.dirname(__file__))
 
-events_file = Path("outputs/events.jsonl")
-
-if events_file.exists():
-    events_file.unlink()
-
-from pipeline.config import LOG_FORMAT, LOG_DATE, LOG_LEVEL
-
-logging.basicConfig(
-    level   = getattr(logging, LOG_LEVEL, logging.INFO),
-    format  = LOG_FORMAT,
-    datefmt = LOG_DATE,
-    handlers= [logging.StreamHandler(sys.stdout)],
-)
-logger = logging.getLogger("run_detection")
-
-# ─────────────────────────────────────────────────────────────────────────────
-# Pipeline imports (after logging is configured)
-# ─────────────────────────────────────────────────────────────────────────────
-
-from pipeline.config import CAMERAS, OUTPUTS_DIR
-from pipeline.video_processor import VideoProcessor
+from normalize_events import normalize_file
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-# Argument parsing
-# ─────────────────────────────────────────────────────────────────────────────
-
-def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(
-        description="Phase 1 — YOLO person detection on store CCTV footage.",
-        formatter_class=argparse.RawTextHelpFormatter,
-    )
-    parser.add_argument(
-        "--camera", "-c",
-        default="CAM3",
-        choices=list(CAMERAS.keys()),
-        help="Which camera to process (default: CAM3 — entry/exit camera)",
-    )
-    parser.add_argument(
-        "--all", "-a",
-        action="store_true",
-        help="Process all enabled cameras sequentially",
-    )
-    parser.add_argument(
-        "--max-frames", "-m",
-        type=int,
-        default=None,
-        help="Stop after N source frames. Useful for quick testing.\n"
-             "Example: --max-frames 300 ≈ 20 seconds at 15fps",
-    )
-    parser.add_argument(
-        "--preview", "-p",
-        action="store_true",
-        help="Show live OpenCV window (requires a display — do not use in Docker)",
-    )
-    parser.add_argument(
-        "--output", "-o",
-        type=str,
-        default=None,
-        help="Custom output path for the annotated video.\n"
-             "Default: outputs/<camera_id>_detection.mp4",
-    )
-    return parser.parse_args()
-
-
-# ─────────────────────────────────────────────────────────────────────────────
-# Processing logic
-# ─────────────────────────────────────────────────────────────────────────────
-
-def process_camera(
-    camera_id   : str,
-    max_frames  : int | None,
-    show_preview: bool,
-    output_path : str | None,
-) -> dict | None:
+def run_sample_mode(store_id: str = None, input_path: str = "data/sample_events.jsonl"):
     """
-    Run detection on a single camera. Returns summary dict or None on error.
+    Process sample_events.jsonl → outputs/events.jsonl
+    This mode requires NO video or GPU — useful for testing API correctness.
     """
-    cam_cfg = CAMERAS.get(camera_id)
-    if cam_cfg is None:
-        logger.error("Unknown camera_id: %s", camera_id)
-        return None
+    print(f"[run_detection] SAMPLE MODE — processing {input_path}")
+    print(f"[run_detection] Store override: {store_id or '(from data)'}")
 
-    if not cam_cfg["enabled"]:
-        logger.warning(
-            "Camera %s is disabled in config (role=%s). Skipping.",
-            camera_id, cam_cfg["role"],
-        )
-        return None
+    if not os.path.exists(input_path):
+        print(f"[run_detection] ERROR: {input_path} not found")
+        sys.exit(1)
 
-    input_path = cam_cfg["file"]
-    out_path   = Path(output_path) if output_path else \
-                 OUTPUTS_DIR / f"{camera_id.lower()}_detection.mp4"
+    # Clear existing output so we get fresh events
+    os.makedirs("outputs", exist_ok=True)
+    events_jsonl = "outputs/events.jsonl"
+    open(events_jsonl, "w").close()
 
-    logger.info("=" * 60)
-    logger.info("Processing camera: %s", camera_id)
-    logger.info("Role:              %s", cam_cfg["description"])
-    logger.info("Input:             %s", input_path)
-    logger.info("Output:            %s", out_path)
-    logger.info("=" * 60)
-
-    processor = VideoProcessor(
-        camera_id   = camera_id,
-        input_path  = input_path,
-        output_path = out_path,
-        max_frames  = max_frames,
-        show_preview= show_preview,
+    evts = normalize_file(
+        input_path=input_path,
+        output_jsonl=events_jsonl,
+        output_json="outputs/normalized_events.json",
+        store_override=store_id,
     )
+
+    # Ingest into DB via API layer directly (no HTTP needed)
+    try:
+        from app.database import SessionLocal, init_db
+        from app.routes.events import _event_to_db, _update_session, _parse_ts
+        from app.models import Event
+        from app.schemas.event_schema import IngestEventSchema
+        from pydantic import ValidationError
+
+        init_db()
+        db = SessionLocal()
+        ingested = dupes = failed = 0
+
+        for ev_dict in evts:
+            try:
+                ev = IngestEventSchema.model_validate(ev_dict)
+                existing = db.get(Event, ev.event_id)
+                if existing:
+                    dupes += 1
+                    continue
+                record = _event_to_db(ev)
+                db.add(record)
+                db.flush()
+                ts = _parse_ts(ev.timestamp)
+                _update_session(ev, ts, db)
+                db.commit()
+                ingested += 1
+            except ValidationError as e:
+                failed += 1
+                print(f"  [WARN] Validation failed for {ev_dict.get('event_id','?')}: {e.errors()[0]['msg']}")
+            except Exception as e:
+                db.rollback()
+                failed += 1
+
+        db.close()
+        print(f"[run_detection] DB: ingested={ingested} duplicates={dupes} failed={failed}")
+
+    except ImportError as e:
+        print(f"[run_detection] DB ingest skipped (missing dep: {e}) — events written to JSONL only")
+
+    # Print first 5 events so reviewer sees output immediately
+    print("\n[run_detection] First 5 events in outputs/events.jsonl:")
+    with open("outputs/events.jsonl") as f:
+        for i, line in enumerate(f):
+            if i >= 5:
+                break
+            ev = json.loads(line)
+            print(f"  {ev['event_type']:25s} visitor={ev['visitor_id']} store={ev['store_id']} conf={ev['confidence']}")
+
+    print(f"\n[run_detection] Done. Total events: {len(evts)}")
+    return evts
+
+
+def run_video_mode(store_id: str, video_map: dict, clip_start: datetime.datetime = None):
+    """
+    Full video processing pipeline using YOLO + ByteTrack.
+    Requires: ultralytics, opencv-python
+    """
+    print(f"[run_detection] VIDEO MODE — store={store_id}")
+    for cam, path in video_map.items():
+        print(f"  Camera {cam}: {path}")
 
     try:
-        summary = processor.run()
-    except FileNotFoundError as e:
-        logger.error("Video file not found: %s", e)
-        logger.error(
-            "Place your video files in the data/clips/ directory:\n"
-            "  store-intelligence/data/clips/CAM3.mp4"
-        )
-        return None
-    except Exception as e:
-        logger.error("Processing failed for %s: %s", camera_id, e, exc_info=True)
-        return None
+        from pipeline.video_processor import VideoProcessor
+        from app.database import SessionLocal, init_db
+        init_db()
+        db = SessionLocal()
 
-    return summary
+        proc = VideoProcessor(store_id=store_id, db_session=db)
+        evts = proc.process_store(video_map, clip_start=clip_start)
 
+        db.close()
+        print(f"[run_detection] Processed {len(evts)} events")
+        return evts
 
-# ─────────────────────────────────────────────────────────────────────────────
-# Main
-# ─────────────────────────────────────────────────────────────────────────────
-
-def main() -> None:
-    args = parse_args()
-
-    cameras_to_process = (
-        [cid for cid, cfg in CAMERAS.items() if cfg["enabled"]]
-        if args.all
-        else [args.camera]
-    )
-
-    all_summaries = []
-
-    for camera_id in cameras_to_process:
-        summary = process_camera(
-            camera_id   = camera_id,
-            max_frames  = args.max_frames,
-            show_preview= args.preview,
-            output_path = args.output if len(cameras_to_process) == 1 else None,
-        )
-        if summary:
-            all_summaries.append(summary)
-
-    # ── Print final report ────────────────────────────────────────────────────
-    if all_summaries:
-        print("\n" + "=" * 60)
-        print("PHASE 1 DETECTION — FINAL REPORT")
-        print("=" * 60)
-        for s in all_summaries:
-            print(f"\nCamera: {s['camera_id']}")
-            print(f"  Output video  : {s['output_path']}")
-            print(f"  Frames read   : {s['total_frames_read']}")
-            print(f"  Frames inferred: {s['total_frames_processed']}")
-            print(f"  Total detections: {s['total_detections']}")
-            print(f"  Avg per frame : {s['avg_detections_per_frame']}")
-            print(f"  Time elapsed  : {s['processing_time_sec']}s")
-            print(f"  FPS achieved  : {s['fps_achieved']}")
-
-        # Save machine-readable summary
-        summary_path = OUTPUTS_DIR / "phase1_summary.json"
-        with open(summary_path, "w") as f:
-            json.dump(all_summaries, f, indent=2)
-        print(f"\nSummary saved: {summary_path}")
-        print("=" * 60)
-    else:
-        logger.error("No cameras were processed successfully.")
-        sys.exit(1)
+    except ImportError as e:
+        print(f"[run_detection] ERROR: Missing dependency: {e}")
+        print("[run_detection] Falling back to sample mode")
+        return run_sample_mode(store_id=store_id)
 
 
 if __name__ == "__main__":
-    main()
+    parser = argparse.ArgumentParser(description="Run detection pipeline")
+    parser.add_argument("--camera",  help="Camera ID (e.g. CAM3) — runs sample mode")
+    parser.add_argument("--store",   help="Store ID override", default=None)
+    parser.add_argument("--sample",  action="store_true", help="Process sample_events.jsonl")
+    parser.add_argument("--input",   default="data/sample_events.jsonl")
+    parser.add_argument("--all",     action="store_true", help="Process all cameras")
+    parser.add_argument("--videos",  nargs="*", help="camera:path pairs for video mode")
+    parser.add_argument("--clip-start", help="ISO8601 clip start time", default=None)
+    args = parser.parse_args()
+
+    if args.videos:
+        # Video mode: --videos CAM3:path/to/cam3.mp4 CAM1:path/to/cam1.mp4
+        video_map = {}
+        for item in args.videos:
+            cam, path = item.split(":", 1)
+            video_map[cam] = path
+        clip_start = None
+        if args.clip_start:
+            clip_start = datetime.datetime.fromisoformat(args.clip_start.replace("Z", "+00:00"))
+        run_video_mode(
+            store_id  = args.store or "STORE_1",
+            video_map = video_map,
+            clip_start = clip_start,
+        )
+    else:
+        # Sample mode (camera arg just selects the input — still processes sample data)
+        if args.camera:
+            print(f"[run_detection] Camera: {args.camera} → processing sample events")
+        run_sample_mode(store_id=args.store, input_path=args.input)

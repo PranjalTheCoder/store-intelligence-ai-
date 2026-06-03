@@ -1,410 +1,359 @@
 """
-video_processor.py
-------------------
-Reads a video file frame-by-frame, runs PersonDetector, annotates
-each frame with bounding boxes and metadata, and writes an output video.
+video_processor.py — Orchestrates detection pipeline against video files.
 
-Responsibilities:
-  - Open input video with OpenCV
-  - Skip frames according to FRAME_SKIP config
-  - Call PersonDetector.detect() on each processed frame
-  - Draw annotated bounding boxes on frame
-  - Draw entry line for CAM3 (entry/exit camera)
-  - Write annotated frames to output video
-  - Log per-frame stats and a final summary
+Wires together:
+  YOLOv8 → ByteTrack → StaffDetector → EventEngine → ZoneEngine → BillingEngine → ReentryEngine
+  → Session Engine → SQLite
 
-Design notes:
-  - This class is intentionally NOT responsible for tracking or events.
-    That comes in Phase 2. Right now it only does: read → detect → annotate → write.
-  - The overlay_detections() method will be extended in Phase 2 to show track IDs.
-    For now, it shows a placeholder "P-?" for person ID.
-  - Supports processing a subset of frames via max_frames parameter (useful for testing).
+Usage:
+    python -m pipeline.video_processor \
+        --store STORE_1 \
+        --videos resources/Store1/CAM3-entry.mp4 resources/Store1/CAM1-zone.mp4 ...
 """
 
 from __future__ import annotations
-from pipeline.tracker import VisitorTracker
-from pipeline.detector import PersonDetector
-from pipeline.event_engine import EventEngine
-import logging
-import time
+
+import argparse
+import datetime
+import json
+import os
+import sys
+import uuid
 from pathlib import Path
 from typing import List, Optional
-from datetime import datetime
-from datetime import timedelta
-import cv2
-import numpy as np
 
-from pipeline.config import (
-    BBOX_COLOR_PERSON,
-    BBOX_THICKNESS,
-    ENTRY_LINE_COLOR,
-    ENTRY_LINE_THICKNESS,
-    ENTRY_LINE_Y,
-    FONT,
-    FONT_SCALE,
-    FONT_THICKNESS,
-    FRAME_SKIP,
-    OUTPUT_FOURCC,
-    OUTPUTS_DIR,
-)
-from pipeline.detector import Detection, PersonDetector
+# ---- optional heavy imports (graceful degradation) -----
+try:
+    import cv2
+    CV2_AVAILABLE = True
+except ImportError:
+    CV2_AVAILABLE = False
+    print("[video_processor] WARNING: opencv-python not installed.")
 
-logger = logging.getLogger(__name__)
+try:
+    from ultralytics import YOLO
+    YOLO_AVAILABLE = True
+except ImportError:
+    YOLO_AVAILABLE = False
+    print("[video_processor] WARNING: ultralytics not installed — using mock detector.")
+
+# --------------------------------------------------------
+
+from pipeline.event_engine import EventEngine, RetailEvent
+from pipeline.zone_engine import ZoneEngine
+from pipeline.billing_engine import BillingEngine
+from pipeline.reentry_engine import ReentryEngine
+from pipeline.staff_detector import StaffDetector
+# from pipeline.session_engine import SessionEngine
+
+
+CAMERA_ROLE_MAP = {
+    "entry":   "entry",
+    "cam3":    "entry",
+    "entry1":  "entry",
+    "entry2":  "entry",
+    "zone":    "zone",
+    "cam1":    "zone",
+    "cam2":    "zone",
+    "billing": "billing",
+    "cam5":    "billing",
+    "billing_area": "billing",
+}
+
+ZONE_JSON_MAP = {
+    "STORE_1": "pipeline/store1_zones.json",
+    "STORE_2": "pipeline/store2_zones.json",
+}
 
 
 class VideoProcessor:
-    """
-    Orchestrates the full detection pipeline for one video file.
 
-    Usage
-    -----
-        processor = VideoProcessor(
-            camera_id  = "CAM3",
-            input_path = Path("data/clips/CAM3.mp4"),
-            output_path= Path("outputs/cam3_detection.mp4"),
-        )
-        processor.run()
+    MODEL_PATH  = os.environ.get("YOLO_MODEL", "yolov8n.pt")
+    CONF_THRESH = 0.35
+    PERSON_CLASS = 0
+    OUTPUT_JSONL  = "outputs/events.jsonl"
 
-    After run() completes, call processor.summary() to get stats.
-    """
+    def __init__(self, store_id: str, db_session=None):
+        self.store_id   = store_id
+        self.db_session = db_session
 
-    def __init__(
+        # Shared components (per store)
+        self.staff_detector  = StaffDetector()
+        self.reentry_engine  = ReentryEngine()
+        self.session_engine  = SessionEngine(db_session=db_session) if db_session else None
+
+        zones_json = ZONE_JSON_MAP.get(store_id)
+        self.zone_engine    = ZoneEngine(zones_json) if zones_json and Path(zones_json).exists() else None
+        self.billing_engine = BillingEngine(store_id=store_id, camera_id="CAM5")
+
+        if YOLO_AVAILABLE:
+            self.model = YOLO(self.MODEL_PATH)
+        else:
+            self.model = None
+
+        os.makedirs("outputs", exist_ok=True)
+
+    # ------------------------------------------------------------------
+
+    def process_video(
         self,
-        camera_id  : str,
-        input_path : Path,
-        output_path: Optional[Path] = None,
-        max_frames : Optional[int]  = None,
-        show_preview: bool          = False,
-    ) -> None:
-        """
-        Parameters
-        ----------
-        camera_id    : Camera identifier string (e.g. "CAM3")
-        input_path   : Path to the input .mp4 file
-        output_path  : Where to write the annotated video.
-                       If None, defaults to outputs/<camera_id>_detection.mp4
-        max_frames   : Stop after this many SOURCE frames (useful for quick tests).
-                       None = process entire video.
-        show_preview : Show live OpenCV window while processing.
-                       Set False when running headless (server/Docker).
-        """
-        self.camera_id    = camera_id
-        self.input_path   = Path(input_path)
-        self.output_path  = Path(output_path) if output_path else \
-                            OUTPUTS_DIR / f"{camera_id.lower()}_detection.mp4"
-        self.max_frames   = max_frames
-        self.show_preview = show_preview
+        video_path:  str,
+        camera_id:   str,
+        clip_start:  Optional[datetime.datetime] = None,
+    ) -> List[RetailEvent]:
+        # print(self._infer_role("CAM3"))
+        """Process a single video file. Returns all emitted events."""
+        role = self._infer_role(camera_id, video_path)
+        print(f"[processor] {camera_id} ({role}) — {video_path}")
 
-        # Stats — populated during run()
-        self._total_frames_read      = 0
-        self._total_frames_processed = 0
-        self._total_detections       = 0
-        self._processing_time_sec    = 0.0
-        self._video_fps              = 0.0
-        self._video_width            = 0
-        self._video_height           = 0
-
-        # Detector is created in run() so that any import/GPU errors
-        # are surfaced at runtime with context, not at import time.
-        self._detector: Optional[PersonDetector] = None
-        self.event_engine = EventEngine()
-        logger.info(
-            "VideoProcessor init | camera=%s | input=%s | output=%s",
-            self.camera_id, self.input_path, self.output_path,
+        engine = EventEngine(
+            store_id        = self.store_id,
+            camera_id       = camera_id,
+            camera_role     = role,
+            staff_detector  = self.staff_detector,
+            zone_engine     = self.zone_engine if role == "zone" else None,
+            billing_engine  = self.billing_engine if role == "billing" else None,
+            reentry_engine  = self.reentry_engine,
         )
 
-    # ─────────────────────────────────────────────────────────────────────────
-    # Public API
-    # ─────────────────────────────────────────────────────────────────────────
+        all_events: List[RetailEvent] = []
 
-    def run(self) -> dict:
-        """
-        Execute the full pipeline: open → detect → annotate → write → close.
+        if not CV2_AVAILABLE or not self.model:
+            print(f"[processor] Skipping real video processing — dependencies not available.")
+            return all_events
 
-        Returns
-        -------
-        dict : Summary stats (same as summary())
-        """
-        self._validate_input()
+        cap = cv2.VideoCapture(video_path)
+        fps = cap.get(cv2.CAP_PROP_FPS) or 15.0
+        output_video = f"outputs/{camera_id}_detections.mp4"
 
-        cap    = self._open_capture()
-        writer = self._open_writer(cap)
+        fourcc = cv2.VideoWriter_fourcc(*"mp4v")
 
-        self._detector = PersonDetector(camera_id=self.camera_id)
-        self.tracker = VisitorTracker()
-        self._detector.warmup(frame_shape=(self._video_height, self._video_width, 3))
+        width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+        height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
 
-        logger.info(
-            "Starting processing | fps=%.2f | resolution=%dx%d | frame_skip=%d",
-            self._video_fps, self._video_width, self._video_height, FRAME_SKIP,
+        writer = cv2.VideoWriter(
+            output_video,
+            fourcc,
+            fps,
+            (width, height)
         )
+        engine.fps = fps
 
-        start_time = time.time()
-
-
-        try:
-            self._process_loop(cap, writer)
-        except KeyboardInterrupt:
-            logger.info("Processing interrupted by user.")
-        finally:
-            self.event_engine.finalize_sessions()
-            cap.release()
-            writer.release()
-            if self.show_preview:
-                cv2.destroyAllWindows()
-
-        self._processing_time_sec = time.time() - start_time
-        logger.info("Processing complete. %s", self._format_summary())
-
-        return self.summary()
-
-    def summary(self) -> dict:
-        """Return a dict of processing statistics."""
-        fps_achieved = (
-            self._total_frames_processed / self._processing_time_sec
-            if self._processing_time_sec > 0 else 0.0
-        )
-        return {
-            "camera_id"            : self.camera_id,
-            "input_path"           : str(self.input_path),
-            "output_path"          : str(self.output_path),
-            "total_frames_read"    : self._total_frames_read,
-            "total_frames_processed": self._total_frames_processed,
-            "total_detections"     : self._total_detections,
-            "avg_detections_per_frame": round(
-                self._total_detections / max(self._total_frames_processed, 1), 2
-            ),
-            "processing_time_sec"  : round(self._processing_time_sec, 2),
-            "fps_achieved"         : round(fps_achieved, 2),
-            "source_fps"           : self._video_fps,
-        }
-
-    # ─────────────────────────────────────────────────────────────────────────
-    # Internal — setup
-    # ─────────────────────────────────────────────────────────────────────────
-
-    def _validate_input(self) -> None:
-        if not self.input_path.exists():
-            raise FileNotFoundError(
-                f"Input video not found: {self.input_path}\n"
-                f"Place your video files in: data/clips/"
-            )
-
-    def _open_capture(self) -> cv2.VideoCapture:
-        cap = cv2.VideoCapture(str(self.input_path))
-        if not cap.isOpened():
-            raise RuntimeError(f"OpenCV could not open video: {self.input_path}")
-
-        self._video_fps    = cap.get(cv2.CAP_PROP_FPS) or 15.0
-        self._video_width  = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-        self._video_height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-        total              = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
-
-        logger.info(
-            "Opened video: %s | %dx%d @ %.1f fps | total frames: %d",
-            self.input_path.name, self._video_width, self._video_height,
-            self._video_fps, total,
-        )
-        return cap
-
-    def _open_writer(self, cap: cv2.VideoCapture) -> cv2.VideoWriter:
-        self.output_path.parent.mkdir(parents=True, exist_ok=True)
-        fourcc = cv2.VideoWriter_fourcc(*OUTPUT_FOURCC)
-        # Output FPS = source FPS / FRAME_SKIP so playback speed is correct
-        out_fps = max(self._video_fps / FRAME_SKIP, 1.0)
-        writer  = cv2.VideoWriter(
-            str(self.output_path), fourcc, out_fps,
-            (self._video_width, self._video_height),
-        )
-        if not writer.isOpened():
-            raise RuntimeError(f"Could not open VideoWriter for: {self.output_path}")
-        logger.info("Output writer ready: %s | out_fps=%.1f", self.output_path, out_fps)
-        return writer
-
-    # ─────────────────────────────────────────────────────────────────────────
-    # Internal — processing loop
-    # ─────────────────────────────────────────────────────────────────────────
-
-    def _process_loop(self, cap: cv2.VideoCapture, writer: cv2.VideoWriter) -> None:
-        frame_index   = 0     # total frames read from video
-        frames_done   = 0     # frames actually processed through YOLO
-
-        log_interval  = max(int(self._video_fps * 10), 30)  # log every ~10 seconds
+        frame_idx = 0
+        if clip_start is None:
+            clip_start = datetime.datetime.utcnow()
 
         while True:
             ret, frame = cap.read()
             if not ret:
-                logger.info("End of video reached at frame %d.", frame_index)
                 break
 
-            frame_index += 1
-            self._total_frames_read = frame_index
-
-            # Honour max_frames limit (for quick test runs)
-            if self.max_frames and frame_index > self.max_frames:
-                logger.info("max_frames=%d reached, stopping.", self.max_frames)
-                break
-
-            # Frame skip — only process every Nth frame
-            if frame_index % FRAME_SKIP != 0:
+            # Skip every other frame for speed (process at ~7.5fps)
+            frame_idx += 1
+            if frame_idx % 2 != 0:
                 continue
 
-            frames_done += 1
-            self._total_frames_processed = frames_done
+            frame_ts = clip_start + datetime.timedelta(seconds=frame_idx / fps)
+            frame_h, frame_w = frame.shape[:2]
 
-            # ── Detect ────────────────────────────────────────────────────
-            detections: List[Detection] = self._detector.detect(frame, frame_num=frame_index)
-            tracked_objects = self.tracker.update(detections)
-            for track in tracked_objects:
-
-                self.event_engine.process_track(
-                    track.track_id,
-                    track.centroid,
-                    datetime.now()
-                )
-
-            for obj in tracked_objects:
-
-                print(
-                    f"Track ID={obj.track_id} "
-                    f"Centroid={obj.centroid}"
-                )
-            self._total_detections += len(detections)
-
-            # ── Annotate ──────────────────────────────────────────────────
-            annotated = self._annotate_frame(frame.copy(), tracked_objects, frame_index)
-
-            # ── Write ─────────────────────────────────────────────────────
-            writer.write(annotated)
-
-            # ── Preview ───────────────────────────────────────────────────
-            if self.show_preview:
-                cv2.imshow(f"Detection — {self.camera_id}", annotated)
-                if cv2.waitKey(1) & 0xFF == ord("q"):
-                    logger.info("Preview window closed by user.")
-                    break
-
-            # ── Progress log ──────────────────────────────────────────────
-            if frames_done % log_interval == 0:
-                elapsed = time.time()
-                logger.info(
-                    "Progress | frame=%d | processed=%d | detections=%d | persons_this_frame=%d",
-                    frame_index, frames_done, self._total_detections, len(detections),
-                )
-
-    # ─────────────────────────────────────────────────────────────────────────
-    # Internal — annotation
-    # ─────────────────────────────────────────────────────────────────────────
-
-    def _annotate_frame(
-        self,
-        frame     : np.ndarray,
-        detections: List[Detection],
-        frame_num : int,
-    ) -> np.ndarray:
-        """
-        Draw all detections and UI overlays onto the frame.
-
-        Draws:
-          - Bounding box per detection
-          - Label: "ID-{obj.track_id} | conf" (placeholder until ByteTrack assigns IDs in Phase 2)
-          - Entry line for CAM3
-          - HUD with frame number + detection count
-        """
-        # Draw entry threshold line for CAM3
-        if self.camera_id == "CAM3":
-            self._draw_entry_line(frame)
-
-        # Draw each detection
-        for det in detections:
-            self._draw_detection(frame, det)
-
-
-        # Draw HUD overlay (top-left info bar)
-        self._draw_hud(frame, frame_num, len(detections))
-
-        return frame
-
-    def _draw_detection(self, frame: np.ndarray, det: Detection) -> None:
-        x1, y1, x2, y2 = [int(v) for v in det.bbox_xyxy]
-        cx, cy          = det.centroid
-
-        # Bounding box
-        cv2.rectangle(frame, (x1, y1), (x2, y2), BBOX_COLOR_PERSON, BBOX_THICKNESS)
-
-        # Centroid dot (useful for entry-line crossing visualisation)
-        cv2.circle(frame, (cx, cy), 4, BBOX_COLOR_PERSON, -1)
-
-        # Label: person ID placeholder + confidence
-        # track_id will be populated by ByteTrack in Phase 2
-        person_label = f"ID-{det.track_id}" if det.track_id is not None else "P-?"
-        label        = f"{person_label} | {det.confidence:.2f}"
-
-        # Background rectangle for label readability
-        (label_w, label_h), baseline = cv2.getTextSize(
-            label, FONT, FONT_SCALE, FONT_THICKNESS
-        )
-        label_y = max(y1 - 6, label_h + 4)
-        cv2.rectangle(
-            frame,
-            (x1, label_y - label_h - baseline - 2),
-            (x1 + label_w + 2, label_y + baseline),
-            BBOX_COLOR_PERSON,
-            cv2.FILLED,
-        )
-        cv2.putText(
-            frame, label,
-            (x1 + 1, label_y - baseline),
-            FONT, FONT_SCALE, (0, 0, 0), FONT_THICKNESS, cv2.LINE_AA,
-        )
-
-    def _draw_entry_line(self, frame: np.ndarray) -> None:
-        """Draw the entry/exit threshold line across the full width (CAM3 only)."""
-        h, w = frame.shape[:2]
-        cv2.line(
-            frame,
-            (0, ENTRY_LINE_Y), (w, ENTRY_LINE_Y),
-            ENTRY_LINE_COLOR, ENTRY_LINE_THICKNESS,
-        )
-        # Labels on the line
-        cv2.putText(
-            frame, "STORE (INSIDE)",
-            (10, ENTRY_LINE_Y - 10),
-            FONT, 0.6, ENTRY_LINE_COLOR, 1, cv2.LINE_AA,
-        )
-        cv2.putText(
-            frame, "MALL (OUTSIDE)",
-            (10, ENTRY_LINE_Y + 20),
-            FONT, 0.6, ENTRY_LINE_COLOR, 1, cv2.LINE_AA,
-        )
-
-    def _draw_hud(self, frame: np.ndarray, frame_num: int, count: int) -> None:
-        """Draw a heads-up display bar at the top of the frame."""
-        hud_lines = [
-            f"CAM: {self.camera_id}",
-            f"Frame: {frame_num}",
-            f"Persons: {count}",
-            f"Total detected: {self._total_detections}",
-        ]
-        # Semi-transparent dark bar
-        overlay = frame.copy()
-        cv2.rectangle(overlay, (0, 0), (220, 18 + 18 * len(hud_lines)), (0, 0, 0), -1)
-        cv2.addWeighted(overlay, 0.55, frame, 0.45, 0, frame)
-
-        for i, line in enumerate(hud_lines):
-            cv2.putText(
-                frame, line,
-                (6, 18 + i * 18),
-                FONT, 0.52, (255, 255, 255), 1, cv2.LINE_AA,
+            # YOLO detection
+            results = self.model.track(
+                frame,
+                persist=True,
+                tracker="bytetrack.yaml",
+                classes=[self.PERSON_CLASS],
+                conf=self.CONF_THRESH,
+                verbose=False
             )
 
-    def _format_summary(self) -> str:
-        s = self.summary()
-        return (
-            f"frames_read={s['total_frames_read']} | "
-            f"frames_processed={s['total_frames_processed']} | "
-            f"detections={s['total_detections']} | "
-            f"avg_per_frame={s['avg_detections_per_frame']} | "
-            f"time={s['processing_time_sec']}s | "
-            f"fps={s['fps_achieved']}"
+            # ByteTrack is built into ultralytics — use track() instead of predict()
+            # Results include .boxes.id for track IDs
+            detections = []
+            # print(
+            #     "boxes=",
+            #     0 if results[0].boxes is None else len(results[0].boxes),
+            #     "ids=",
+            #     None if results[0].boxes is None else results[0].boxes.id
+            # )
+            if results[0].boxes is None:
+                writer.write(frame)
+                continue
+            for box in results[0].boxes:
+                if box.id is None:
+                    continue
+                track_id = int(box.id.item())
+                
+                x1, y1, x2, y2 = box.xyxy[0].tolist()
+                conf = float(box.conf.item())
+
+                cv2.rectangle(
+                    frame,
+                    (int(x1), int(y1)),
+                    (int(x2), int(y2)),
+                    (0, 255, 0),
+                    2
+                )
+
+                cv2.putText(
+                    frame,
+                    f"ID:{track_id}",
+                    (int(x1), int(y1) - 10),
+                    cv2.FONT_HERSHEY_SIMPLEX,
+                    0.5,
+                    (0, 255, 0),
+                    2
+                )
+
+
+                # Update staff detector
+                self.staff_detector.update(track_id, (x1, y1, x2, y2), frame_ts)
+
+                detections.append({
+                    "track_id":   track_id,
+                    "bbox":       (x1, y1, x2, y2),
+                    "confidence": conf,
+                    "frame_h":    frame_h,
+                    "frame_w":    frame_w,
+                })
+
+            frame_events = engine.process_frame(detections, frame_ts)
+            all_events.extend(frame_events)
+            writer.write(frame)
+
+            # Feed events to session engine
+            if self.session_engine:
+                for ev in frame_events:
+                    self.session_engine.handle_event(ev)
+            
+
+        cap.release()
+        writer.release()
+        # Write JSONL
+        self._append_jsonl(all_events)
+
+        # Persist to DB
+        if self.db_session:
+            from app.repository import EventRepository
+            repo = EventRepository(self.db_session)
+            repo.save_events_bulk(all_events)
+        print(
+            f"[processor] Detection video saved: "
+            f"{output_video}"
         )
+
+        print(f"[processor] {camera_id}: emitted {len(all_events)} events")
+        return all_events
+
+    def process_store(self, video_map: dict, clip_start: Optional[datetime.datetime] = None):
+        """
+        Process all cameras for a store.
+        video_map: { camera_id: video_file_path }
+        Entry cameras first (to initialise sessions), then zone, then billing.
+        """
+        role_order = ["entry", "zone", "billing"]
+
+        ordered = sorted(
+            video_map.items(),
+            key=lambda kv: role_order.index(
+                self._infer_role(kv[0], kv[1])
+            )
+        )
+
+        all_events = []
+        for cam_id, path in ordered:
+            evs = self.process_video(path, cam_id, clip_start)
+            all_events.extend(evs)
+
+        return all_events
+
+    # ------------------------------------------------------------------
+
+    def _infer_role(self, camera_id: str, video_path: str = "") -> str:
+
+        filename = os.path.basename(video_path).lower()
+
+        if "billing" in filename:
+            return "billing"
+
+        if "entry" in filename:
+            return "entry"
+
+        if "zone" in filename:
+            return "zone"
+
+        key = camera_id.lower().replace("-", "").replace("_", "").replace(" ", "")
+
+        for pattern, role in CAMERA_ROLE_MAP.items():
+            if pattern in key:
+                return role
+
+        return "zone"
+
+    def _append_jsonl(self, events: List[RetailEvent]):
+        with open(self.OUTPUT_JSONL, "a") as f:
+            for ev in events:
+                f.write(json.dumps(ev.to_dict()) + "\n")
+
+
+# ---------------------------------------------------------------------------
+# Session Engine (inline — if not already in separate file)
+# ---------------------------------------------------------------------------
+
+class SessionEngine:
+    """Maintains visitor sessions from event stream."""
+
+    def __init__(self, db_session=None):
+        self.db = db_session
+        self._open_sessions = {}   # visitor_id → session_id
+
+    def handle_event(self, ev: RetailEvent):
+        if self.db is None:
+            return
+
+        from app.repository import SessionRepository
+        repo = SessionRepository(self.db)
+
+        if ev.event_type == "ENTRY":
+            sess = repo.create_session(ev.visitor_id, ev.store_id, ev.timestamp, ev.is_staff)
+            self._open_sessions[ev.visitor_id] = sess.session_id
+
+        elif ev.event_type == "EXIT":
+            repo.close_session(ev.visitor_id, ev.store_id, ev.timestamp)
+            self._open_sessions.pop(ev.visitor_id, None)
+
+        elif ev.event_type in ("ZONE_ENTER", "ZONE_EXIT", "ZONE_DWELL") and ev.zone_id:
+            repo.add_zone_to_session(ev.visitor_id, ev.store_id, ev.zone_id)
+
+        elif ev.event_type == "REENTRY":
+            repo.increment_reentry(ev.visitor_id, ev.store_id)
+
+
+# ---------------------------------------------------------------------------
+# CLI entry point
+# ---------------------------------------------------------------------------
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--store",   required=True, help="e.g. STORE_1")
+    parser.add_argument("--videos",  nargs="+",     help="camera_id:path pairs, e.g. CAM3:file.mp4")
+    parser.add_argument("--clip-start", default=None, help="ISO8601 clip start time")
+    args = parser.parse_args()
+
+    from app.database import SessionLocal, init_db
+    init_db()
+    db = SessionLocal()
+
+    clip_start = None
+    if args.clip_start:
+        clip_start = datetime.datetime.fromisoformat(args.clip_start)
+
+    video_map = {}
+    for item in (args.videos or []):
+        cam_id, path = item.split(":", 1)
+        video_map[cam_id] = path
+
+    proc = VideoProcessor(store_id=args.store, db_session=db)
+    proc.process_store(video_map, clip_start=clip_start)
+
+    db.close()
+    print("Done.")

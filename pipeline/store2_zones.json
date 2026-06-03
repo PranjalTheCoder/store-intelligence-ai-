@@ -1,0 +1,104 @@
+{
+  "store_id": "STORE_2",
+  "store_name": "Purplle Store 2",
+  "layout_image": "store 2 - layout.png",
+  "cameras": {
+    "ENTRY1": { "role": "entry",   "label": "Entry 1" },
+    "ENTRY2": { "role": "entry",   "label": "Entry 2" },
+    "ZONE":   { "role": "zone",    "label": "Zone Camera" },
+    "BILLING":{ "role": "billing", "label": "Billing Area" }
+  },
+  "open_hours": { "open": "10:00", "close": "21:00" },
+  "zones": [
+    {
+      "zone_id": "Z2_FOH",
+      "zone_name": "FOH",
+      "sku_zone": "FOH",
+      "camera_id": "ZONE",
+      "zone_type": "FLOOR",
+      "is_revenue_zone": false,
+      "polygon": [[120,600],[1400,600],[1400,1200],[120,1200]]
+    },
+    {
+      "zone_id": "Z2_BOH",
+      "zone_name": "BOH",
+      "sku_zone": "BOH",
+      "camera_id": "ZONE",
+      "zone_type": "BACKROOM",
+      "is_revenue_zone": false,
+      "polygon": [[400,50],[1350,50],[1350,580],[400,580]]
+    },
+    {
+      "zone_id": "Z2_WALL_LEFT",
+      "zone_name": "Wall Units Left",
+      "sku_zone": "WALL_LEFT",
+      "camera_id": "ZONE",
+      "zone_type": "SHELF",
+      "is_revenue_zone": true,
+      "polygon": [[50,600],[200,600],[200,1150],[50,1150]]
+    },
+    {
+      "zone_id": "Z2_WALL_RIGHT",
+      "zone_name": "Wall Units Right",
+      "sku_zone": "WALL_RIGHT",
+      "camera_id": "ZONE",
+      "zone_type": "SHELF",
+      "is_revenue_zone": true,
+      "polygon": [[1280,600],[1450,600],[1450,1150],[1280,1150]]
+    },
+    {
+      "zone_id": "Z2_GONDOLA_1",
+      "zone_name": "MK Gondola 1",
+      "sku_zone": "MK_GONDOLA",
+      "camera_id": "ZONE",
+      "zone_type": "GONDOLA",
+      "is_revenue_zone": true,
+      "polygon": [[250,900],[550,900],[550,1100],[250,1100]]
+    },
+    {
+      "zone_id": "Z2_GONDOLA_2",
+      "zone_name": "MK Gondola 2",
+      "sku_zone": "MK_GONDOLA",
+      "camera_id": "ZONE",
+      "zone_type": "GONDOLA",
+      "is_revenue_zone": true,
+      "polygon": [[280,650],[560,650],[560,880],[280,880]]
+    },
+    {
+      "zone_id": "Z2_MAKEUP_AREA",
+      "zone_name": "Makeup Area",
+      "sku_zone": "MAKEUP",
+      "camera_id": "ZONE",
+      "zone_type": "DISPLAY",
+      "is_revenue_zone": true,
+      "polygon": [[850,650],[1200,650],[1200,1000],[850,1000]]
+    },
+    {
+      "zone_id": "Z2_CASH_COUNTER",
+      "zone_name": "Cash Counter",
+      "sku_zone": "BILLING",
+      "camera_id": "BILLING",
+      "zone_type": "BILLING",
+      "is_revenue_zone": true,
+      "polygon": [[500,580],[900,580],[900,760],[500,760]]
+    },
+    {
+      "zone_id": "Z2_WALL_7_10",
+      "zone_name": "Wall Units 7-10",
+      "sku_zone": "WALL_TOP",
+      "camera_id": "ZONE",
+      "zone_type": "SHELF",
+      "is_revenue_zone": true,
+      "polygon": [[130,600],[560,600],[560,680],[130,680]]
+    },
+    {
+      "zone_id": "Z2_WALL_11_13",
+      "zone_name": "Wall Units 11-13",
+      "sku_zone": "WALL_TOP_RIGHT",
+      "camera_id": "ZONE",
+      "zone_type": "SHELF",
+      "is_revenue_zone": true,
+      "polygon": [[700,600],[1120,600],[1120,680],[700,680]]
+    }
+  ]
+}
