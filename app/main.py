@@ -35,13 +35,29 @@ from app.repository import (
     POSRepository, AlertRepository
 )
 from pipeline.correlate_pos import POSCorrelator
-
+from app.middleware.logger import StructuredLoggingMiddleware
+from sqlalchemy.exc import OperationalError, DBAPIError
+from fastapi.responses import JSONResponse
 # ---------------------------------------------------------------------------
 app = FastAPI(
     title="Retail Store Intelligence API",
     version="2.0.0",
     description="Purplle Hackathon — retail analytics from CCTV + POS data",
 )
+
+# Register the new tracking middleware layers
+app.add_middleware(StructuredLoggingMiddleware)
+
+@app.exception_handler(OperationalError)
+@app.exception_handler(DBAPIError)
+async def database_exception_handler(request: Request, exc: Exception):
+    return JSONResponse(
+        status_code=503,
+        content={
+            "error": "DATABASE_UNAVAILABLE",
+            "message": "Database temporarily unavailable"
+        }
+    )
 
 app.add_middleware(
     CORSMiddleware,
@@ -267,49 +283,6 @@ def get_analytics(
             "total_abandons":  e_repo.count_events(store_id=store_id, event_type="BILLING_QUEUE_ABANDON"),
         },
     }
-
-
-# ---------------------------------------------------------------------------
-# NEW routes — Phase 7
-# ---------------------------------------------------------------------------
-
-# @app.post("/events/ingest", status_code=201)
-# def ingest_events(
-#     body: IngestBatch,
-#     db:   Session = Depends(get_db),
-# ):
-#     """
-#     Bulk ingest events from external pipeline or test suite.
-#     Accepts the full challenge event schema.
-#     """
-#     from pipeline.event_engine import RetailEvent
-
-#     retail_events = []
-#     for ev in body.events:
-#         # Parse timestamp
-#         try:
-#             ts = datetime.datetime.fromisoformat(ev.timestamp.replace("Z", "+00:00"))
-#             ts = ts.replace(tzinfo=None)
-#         except Exception:
-#             ts = datetime.datetime.utcnow()
-
-#         retail_events.append(RetailEvent(
-#             event_id   = ev.event_id,
-#             store_id   = ev.store_id,
-#             camera_id  = ev.camera_id,
-#             visitor_id = ev.visitor_id,
-#             event_type = ev.event_type,
-#             timestamp  = ts,
-#             zone_id    = ev.zone_id,
-#             dwell_ms   = ev.dwell_ms,
-#             is_staff   = ev.is_staff,
-#             confidence = ev.confidence,
-#             metadata   = ev.metadata.dict(),
-#         ))
-
-#     repo  = EventRepository(db)
-#     count = repo.save_events_bulk(retail_events)
-#     return {"ingested": count, "status": "ok"}
 
 
 @app.get("/heatmap")

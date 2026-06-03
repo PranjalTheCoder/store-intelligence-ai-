@@ -1,0 +1,76 @@
+name: Store Intelligence CI/CD Pipeline
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+
+jobs:
+  validate-and-test:
+    runs-size: ubuntu-latest
+    steps:
+      - name: Checkout Code Repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python Runtime
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Install System Dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libglib2.0-0 libsm6 libxext6 libxrender-dev libgomp1 curl
+
+      - name: Install Python Dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pytest pytest-cov requests
+
+      - name: Run Code Linter (Flake8 Style Check)
+        run: |
+          pip install flake8
+          # stop the build if there are Python syntax errors or undefined names
+          flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
+
+      - name: Initialize Staging Database
+        run: |
+          python -c "from app.database import init_db; init_db()"
+
+      - name: Execute System Verification Test Suite (Pytest)
+        run: |
+          pytest --cov=app --cov-report=term-missing tests/
+
+  docker-build-verification:
+    needs: validate-and-test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code Repository
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build Local Images via Docker Compose
+        run: |
+          docker compose build
+
+      - name: Boot Containers and Verify Stability
+        run: |
+          docker compose up -d
+          echo "Waiting for API service container health check to pass..."
+          sleep 15
+          docker compose ps
+
+      - name: Run End-to-End Acceptance Checks inside Docker
+        run: |
+          # Execute the official assertion verification script directly inside the live network boundary
+          docker compose exec -T api python assertions.py --base-url http://localhost:8000
+
+      - name: Shutdown Containers Cleanly
+        if: always()
+        run: |
+          docker compose down --volumes
