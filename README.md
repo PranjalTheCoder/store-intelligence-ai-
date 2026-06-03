@@ -1,130 +1,126 @@
-# Store Intelligence System — Purplle Tech Challenge 2026
+# Retail Store Intelligence
 
-AI-powered retail analytics from raw CCTV footage.  
-Store: Brigade_Bangalore (ST1008) | Date: 10 April 2026
+Purplle Hackathon submission — retail analytics from CCTV + POS data.
 
----
+## Quick Start
+
+```bash
+# 1. Install dependencies
+pip install -r requirements.txt
+
+# 2. Initialise the database
+python -c "from app.database import init_db; init_db()"
+
+# 3. Start the API server
+uvicorn app.main:app --reload --port 8000
+
+# 4. Open the dashboard
+cd frontend && npm install && npm start
+```
+
+## Processing Videos
+
+```bash
+# Store 1
+python -m pipeline.video_processor \
+  --store STORE_1 \
+  --clip-start 2026-03-03T10:00:00 \
+  --videos \
+    CAM3:resources/Store1/CAM3-entry.mp4 \
+    CAM1:resources/Store1/CAM1-zone.mp4 \
+    CAM2:resources/Store1/CAM2-zone.mp4 \
+    CAM5:resources/Store1/CAM5-billing.mp4
+
+# Store 2
+python -m pipeline.video_processor \
+  --store STORE_2 \
+  --clip-start 2026-03-03T10:00:00 \
+  --videos \
+    ENTRY1:resources/Store2/entry1.mp4 \
+    ENTRY2:resources/Store2/entry2.mp4 \
+    ZONE:resources/Store2/zone.mp4 \
+    BILLING:resources/Store2/billing_area.mp4
+```
+
+## Running POS Correlation
+
+```bash
+# Copy your POS CSV to data/
+cp POS_sample_transactions.csv data/pos_transactions.csv
+
+# Trigger via API
+curl http://localhost:8000/pos/correlate
+```
+
+## API Reference
+
+| Method | Endpoint          | Description                           |
+| ------ | ----------------- | ------------------------------------- |
+| GET    | /                 | Health check                          |
+| GET    | /health           | Detailed health                       |
+| GET    | /events           | Event stream (filterable)             |
+| GET    | /metrics          | Entry/exit counts + conversion        |
+| GET    | /funnel           | Conversion funnel                     |
+| GET    | /visitors         | All visitor sessions                  |
+| GET    | /visitors/{id}    | Single visitor detail                 |
+| GET    | /sessions         | Session list                          |
+| GET    | /analytics        | Full analytics including zone ranking |
+| GET    | /dashboard        | Dashboard summary                     |
+| POST   | /events/ingest    | Bulk ingest events                    |
+| GET    | /heatmap          | Zone heatmap data                     |
+| GET    | /zones            | Zone statistics                       |
+| GET    | /store-layout     | Zone polygon definitions              |
+| GET    | /live             | Active visitors snapshot              |
+| GET    | /alerts           | System alerts                         |
+| GET    | /anomalies        | Auto-detected anomalies               |
+| GET    | /pos/correlate    | Run POS correlation                   |
+| GET    | /pos/metrics      | POS conversion metrics                |
+| GET    | /pos/transactions | Transaction list                      |
+
+Interactive docs: http://localhost:8000/docs
 
 ## Project Structure
 
 ```
 store-intelligence/
 ├── pipeline/
-│   ├── __init__.py          # Package init
-│   ├── config.py            # All settings — single source of truth
-│   ├── detector.py          # YOLOv8 person detection
-│   └── video_processor.py  # Frame loop, annotation, output
-├── app/                     # FastAPI backend (Phase 3)
-├── tests/                   # Pytest suite (Phase 4)
+│   ├── event_engine.py       # Core event emission (Phase 1)
+│   ├── zone_engine.py        # Zone intelligence (Phase 2)
+│   ├── billing_engine.py     # Queue tracking (Phase 3)
+│   ├── correlate_pos.py      # POS correlation (Phase 4)
+│   ├── reentry_engine.py     # Re-entry detection (Phase 5)
+│   ├── staff_detector.py     # Staff classification (Phase 6)
+│   ├── video_processor.py    # Orchestration
+│   ├── store1_zones.json     # Store 1 zone polygons
+│   └── store2_zones.json     # Store 2 zone polygons
+├── app/
+│   ├── main.py               # FastAPI routes (Phase 7)
+│   ├── models.py             # SQLAlchemy models (Phase 1)
+│   ├── repository.py         # DB operations
+│   └── database.py           # Engine + session factory
 ├── data/
-│   └── clips/               # Place your .mp4 files here (gitignored)
-├── outputs/                 # Generated output videos and reports
-├── run_detection.py         # Phase 1 entrypoint
-├── requirements.txt
-└── README.md
+│   └── store_intelligence.db
+├── outputs/
+│   └── events.jsonl
+├── DESIGN.md
+├── CHOICES.md
+├── Dockerfile
+├── docker-compose.yml
+└── requirements.txt
 ```
 
----
-
-## Phase 1: YOLO Detection
-
-### 1. Setup
+## Docker
 
 ```bash
-# Clone and enter project
-git clone <your-repo-url>
-cd store-intelligence
-
-# Create virtual environment (Python 3.12)
-python3.12 -m venv .venv
-source .venv/bin/activate          # Linux / macOS
-# .venv\Scripts\activate           # Windows
-
-# Install dependencies
-pip install --upgrade pip
-pip install -r requirements.txt
+docker-compose up --build
 ```
 
-### 2. Add video files
+API: http://localhost:8000
+Dashboard: http://localhost:3000
+
+## Running with Docker and resetting the DB
 
 ```bash
-# Create the clips directory if it doesn't exist
-mkdir -p data/clips
-
-# Copy your video files in
-cp /path/to/your/CAM3.mp4 data/clips/CAM3.mp4
-cp /path/to/your/CAM1.mp4 data/clips/CAM1.mp4
-# ... repeat for CAM2, CAM4, CAM5
-```
-
-### 3. Run detection
-
-```bash
-# Process CAM3 (entry/exit camera — start here)
-python run_detection.py --camera CAM3
-
-# Quick test run — only first 300 source frames (~20 seconds)
-python run_detection.py --camera CAM3 --max-frames 300
-
-# Process a different camera
-python run_detection.py --camera CAM1
-
-# Process all enabled cameras sequentially
-python run_detection.py --all
-
-# See help
-python run_detection.py --help
-```
-
-### 4. Verify output
-
-```bash
-# Check output video was created
-ls -lh outputs/
-
-# Check summary JSON
-cat outputs/phase1_summary.json
-
-# Play output video (requires a display)
-# macOS: open outputs/cam3_detection.mp4
-# Linux: vlc outputs/cam3_detection.mp4
-```
-
-**Expected output for CAM3:**
-- `outputs/cam3_detection.mp4` — annotated video with green bounding boxes
-- Each detected person labelled "P-? | 0.xx" (placeholder ID + confidence)
-- Yellow horizontal entry line drawn at Y=480
-- HUD overlay showing frame count and detection count
-- `outputs/phase1_summary.json` — machine-readable stats
-
----
-
-## Camera Reference
-
-| Camera | Role | Status |
-|--------|------|--------|
-| CAM1 | Skincare zone — back wall | Enabled |
-| CAM2 | Makeup zone — right wall | Enabled |
-| CAM3 | Entry/exit threshold | **Primary — start here** |
-| CAM4 | Stockroom/backroom | **Disabled** (staff only) |
-| CAM5 | Billing/POS counter | Enabled |
-
----
-
-## Coming in Phase 2
-
-- ByteTrack multi-object tracking (stable track IDs replacing P-?)
-- Re-ID using colour histogram matching (reentry detection)
-- Entry/exit event generation from CAM3
-
----
-
-## Development
-
-```bash
-# Run tests (Phase 4)
-pytest tests/ -v --cov=pipeline
-
-# Lint
-ruff check pipeline/
+docker-compose down -v
+docker-compose up --build
 ```

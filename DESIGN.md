@@ -66,26 +66,26 @@
 
 ## Database Schema
 
-| Table              | Key Columns                                                      |
-|--------------------|------------------------------------------------------------------|
-| events             | event_id (PK), store_id, visitor_id, event_type, timestamp, zone_id, dwell_ms, is_staff, confidence, metadata_json |
-| sessions           | session_id (PK), visitor_id, store_id, entry_time, exit_time, zones_visited (JSON), converted, basket_value |
-| zone_stats         | store_id + zone_id (unique), total_visits, avg_dwell_ms, heatmap_score |
-| pos_transactions   | transaction_id (PK), store_id, timestamp, basket_value_inr, matched_visitor_id |
-| alerts             | alert_id (PK), store_id, alert_type, severity, message           |
+| Table            | Key Columns                                                                                                        |
+| ---------------- | ------------------------------------------------------------------------------------------------------------------ |
+| events           | event_id (PK), store_id, visitor_id, event_type, timestamp, zone_id, dwell_ms, is_staff, confidence, metadata_json |
+| sessions         | session_id (PK), visitor_id, store_id, entry_time, exit_time, zones_visited (JSON), converted, basket_value        |
+| zone_stats       | store_id + zone_id (unique), total_visits, avg_dwell_ms, heatmap_score                                             |
+| pos_transactions | transaction_id (PK), store_id, timestamp, basket_value_inr, matched_visitor_id                                     |
+| alerts           | alert_id (PK), store_id, alert_type, severity, message                                                             |
 
 ## Camera Roles
 
-| Store   | Camera   | Role    |
-|---------|----------|---------|
-| Store 1 | CAM1     | zone    |
-| Store 1 | CAM2     | zone    |
-| Store 1 | CAM3     | entry   |
-| Store 1 | CAM5     | billing |
-| Store 2 | ENTRY1   | entry   |
-| Store 2 | ENTRY2   | entry   |
-| Store 2 | ZONE     | zone    |
-| Store 2 | BILLING  | billing |
+| Store   | Camera  | Role    |
+| ------- | ------- | ------- |
+| Store 1 | CAM1    | zone    |
+| Store 1 | CAM2    | zone    |
+| Store 1 | CAM3    | entry   |
+| Store 1 | CAM5    | billing |
+| Store 2 | ENTRY1  | entry   |
+| Store 2 | ENTRY2  | entry   |
+| Store 2 | ZONE    | zone    |
+| Store 2 | BILLING | billing |
 
 ## Event Timestamp Derivation
 
