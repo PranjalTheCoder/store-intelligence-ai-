@@ -1,29 +1,28 @@
-FROM python:3.11-slim
+# Use a pre-compiled ML base image that already has PyTorch CPU and OpenCV pre-installed
+FROM ultralytics/ultralytics:latest-cpu
 
 WORKDIR /app
 
-# Install system dependencies for OpenCV AND curl for the Docker healthcheck
+# Install curl for the Docker healthcheck
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    libglib2.0-0 \
-    libsm6 \
-    libxext6 \
-    libxrender-dev \
-    libgomp1 \
     curl \
     && rm -rf /var/lib/apt/lists/*
 
-# Optimize layer caching for dependencies
+# Copy requirements.txt file
 COPY requirements.txt .
-RUN pip install --no-cache-dir --upgrade pip && \
+
+# Remove heavy frameworks from the install loop since they are already pre-baked into the base image
+RUN sed -i '/torch/d' requirements.txt && \
+    sed -i '/torchvision/d' requirements.txt && \
+    sed -i '/opencv/d' requirements.txt && \
+    pip install --no-cache-dir --upgrade pip && \
     pip install --no-cache-dir -r requirements.txt
 
-# Copy project files securely
+# Copy the core project workspace application layers
 COPY . .
 
-# Ensure necessary staging directories exist with proper write permissions
+# Ensure data runtime structures are safely available
 RUN mkdir -p data outputs
 
 EXPOSE 8000
-
-# Default production command
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]

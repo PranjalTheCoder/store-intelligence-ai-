@@ -1,0 +1,35 @@
+# Block Python virtual environments completely
+**/.venv/
+**/venv/
+.venv/**
+venv/**
+
+# Block frontend Node.js modules and build artifacts
+**/node_modules/
+node_modules/**
+**/dist/
+**/build/
+.next/
+
+# Block temporary compilation and testing caches
+**/__pycache__/
+**/*.pyc
+**/*.pyo
+**/*.pyd
+**/.pytest_cache/
+**/.git/
+**/.github/
+
+# Block large raw dataset folders (handled via live Docker volumes)
+**/resources/**
+**/outputs/**
+**/data/**
+
+# Block raw deep-learning weights and heavy binary data dumps
+**/*.mp4
+**/*.avi
+**/*.mkv
+**/*.mov
+**/*.pt
+**/*.db
+**/*.sqlite

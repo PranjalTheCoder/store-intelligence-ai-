@@ -29,7 +29,7 @@ services:
     image: nginx:alpine
     container_name: store-intelligence-dashboard
     ports:
-      - "3000:80"
+      - "5173:80"
     environment:
       - BACKEND_API_URL=http://api:8000
     depends_on:

@@ -2,13 +2,13 @@ name: Store Intelligence CI/CD Pipeline
 
 on:
   push:
-    branches: [main, master]
+    branches: [ main, master ]
   pull_request:
-    branches: [main, master]
+    branches: [ main, master ]
 
 jobs:
   validate-and-test:
-    runs-size: ubuntu-latest
+    runs-on: ubuntu-latest  # <-- Fixed Typo Here
     steps:
       - name: Checkout Code Repository
         uses: actions/checkout@v4
@@ -16,8 +16,8 @@ jobs:
       - name: Set up Python Runtime
         uses: actions/setup-python@v5
         with:
-          python-version: "3.11"
-          cache: "pip"
+          python-version: '3.11'
+          cache: 'pip'
 
       - name: Install System Dependencies
         run: |
@@ -64,7 +64,7 @@ jobs:
           echo "Waiting for API service container health check to pass..."
           sleep 15
           docker compose ps
-
+          
       - name: Run End-to-End Acceptance Checks inside Docker
         run: |
           # Execute the official assertion verification script directly inside the live network boundary
