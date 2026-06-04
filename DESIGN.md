@@ -1,94 +1,26 @@
-# Retail Store Intelligence — System Design
+# DESIGN.md
 
 ## Architecture Overview
+The Apex Retail Intelligence system is decoupled into two primary domains to isolate heavy compute from transactional API traffic:
 
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                     VIDEO INGESTION LAYER                        │
-│  CCTV MP4 clips → OpenCV frame extraction @ 7.5fps effective    │
-└────────────────────────────┬────────────────────────────────────┘
-                             │
-┌────────────────────────────▼────────────────────────────────────┐
-│                    DETECTION LAYER                               │
-│  YOLOv8n  (person class=0, conf≥0.35)                          │
-│  ByteTrack (built into ultralytics — persistent track IDs)      │
-└────────────────────────────┬────────────────────────────────────┘
-                             │  track_id, bbox, confidence
-┌────────────────────────────▼────────────────────────────────────┐
-│                    CLASSIFICATION LAYER                          │
-│  StaffDetector  — duration + zone-coverage heuristic            │
-│  ReentryEngine  — time-gap + visitor_id persistence             │
-└────────────────────────────┬────────────────────────────────────┘
-                             │  is_staff, reentry_flag
-┌────────────────────────────▼────────────────────────────────────┐
-│                    EVENT ENGINE                                   │
-│  EventEngine    — ENTRY / EXIT from entry camera crossing        │
-│  ZoneEngine     — ZONE_ENTER / ZONE_EXIT / ZONE_DWELL (Shapely) │
-│  BillingEngine  — BILLING_QUEUE_JOIN / BILLING_QUEUE_ABANDON     │
-│                                                                  │
-│  Every event: UUID, store_id, camera_id, visitor_id,            │
-│               ISO-8601 timestamp, confidence, metadata           │
-└────────────────────────────┬────────────────────────────────────┘
-                             │  RetailEvent objects
-┌────────────────────────────▼────────────────────────────────────┐
-│                    SESSION ENGINE                                 │
-│  Creates / closes VisitorSession records                         │
-│  Tracks zones_visited list per session                           │
-└────────────────────────────┬────────────────────────────────────┘
-                             │
-┌────────────────────────────▼────────────────────────────────────┐
-│                    PERSISTENCE LAYER                             │
-│  SQLite via SQLAlchemy ORM                                       │
-│  Tables: events, sessions, zone_stats, pos_transactions, alerts  │
-│  Indices on (store_id, timestamp), (visitor_id, event_type)      │
-└────────────────────────────┬────────────────────────────────────┘
-                             │
-┌────────────────────────────▼────────────────────────────────────┐
-│                    POS CORRELATION                               │
-│  pos_transactions.csv → POSCorrelator                            │
-│  5-minute billing-zone window match per transaction              │
-│  Sets session.converted=True, stores basket_value               │
-└────────────────────────────┬────────────────────────────────────┘
-                             │
-┌────────────────────────────▼────────────────────────────────────┐
-│                    API LAYER — FastAPI                           │
-│  /events  /sessions  /metrics  /funnel  /analytics  /dashboard  │
-│  /heatmap  /zones  /store-layout  /live  /alerts  /anomalies    │
-│  POST /events/ingest   GET /pos/correlate                        │
-└────────────────────────────┬────────────────────────────────────┘
-                             │  JSON
-┌────────────────────────────▼────────────────────────────────────┐
-│                    DASHBOARD — React                             │
-│  Store map overlay  /  Zone heatmap  /  Funnel chart            │
-│  Live visitor count  /  Queue depth  /  Conversion rate          │
-└─────────────────────────────────────────────────────────────────┘
-```
+1. **Edge Detection Pipeline (Computer Vision):** A Python worker that consumes raw video, runs object detection (YOLO) and tracking (ByteTrack), and evaluates spatial-temporal heuristics. It outputs discrete business events (e.g., `ZONE_ENTER`).
+2. **Central Intelligence API (FastAPI):** A lightweight REST API backed by a SQLite database running in Write-Ahead-Log (WAL) mode. It ingests events from the pipeline and serves aggregated metrics to the frontend dashboard.
 
-## Database Schema
+## AI-Assisted Decisions
 
-| Table            | Key Columns                                                                                                        |
-| ---------------- | ------------------------------------------------------------------------------------------------------------------ |
-| events           | event_id (PK), store_id, visitor_id, event_type, timestamp, zone_id, dwell_ms, is_staff, confidence, metadata_json |
-| sessions         | session_id (PK), visitor_id, store_id, entry_time, exit_time, zones_visited (JSON), converted, basket_value        |
-| zone_stats       | store_id + zone_id (unique), total_visits, avg_dwell_ms, heatmap_score                                             |
-| pos_transactions | transaction_id (PK), store_id, timestamp, basket_value_inr, matched_visitor_id                                     |
-| alerts           | alert_id (PK), store_id, alert_type, severity, message                                                             |
+During development, I utilized Large Language Models (LLMs) as an architectural sounding board. Here is how AI shaped the design, and where I chose to override it:
 
-## Camera Roles
+1. **Staff Detection Strategy**
+   * *What AI Suggested:* Deploy a secondary deep learning classifier (e.g., ResNet) or a VLM on cropped bounding boxes to identify store uniforms.
+   * *What I Changed:* I explicitly overrode this and implemented a spatial-temporal heuristic engine instead. 
+   * *Why:* Running a secondary inference pass halves the pipeline's FPS on edge CPUs. By mapping employee-only zones (like the cash counter interior) and tracking `dwell_time`, the system flags a `visitor_id` as `is_staff=True` if they spend prolonged periods in restricted areas. This achieves the business requirement with zero additional compute overhead.
 
-| Store   | Camera  | Role    |
-| ------- | ------- | ------- |
-| Store 1 | CAM1    | zone    |
-| Store 1 | CAM2    | zone    |
-| Store 1 | CAM3    | entry   |
-| Store 1 | CAM5    | billing |
-| Store 2 | ENTRY1  | entry   |
-| Store 2 | ENTRY2  | entry   |
-| Store 2 | ZONE    | zone    |
-| Store 2 | BILLING | billing |
+2. **Database Connection Management**
+   * *What AI Suggested:* Standard SQLAlchemy `SessionLocal` dependency injection per request.
+   * *What I Changed:* I agreed with the pattern but manually hardened the SQLite engine configuration. I added `pool_pre_ping=True`, `timeout=15`, and explicitly wrapped the FastAPI dependency in a `try/finally: db.close()` block.
+   * *Why:* AI often overlooks SQLite file locking issues in concurrent environments. Because the CV pipeline writes heavily while the dashboard polls concurrently every 5 seconds, strict connection lifecycle management was necessary to prevent `OperationalError: database is locked`.
 
-## Event Timestamp Derivation
-
-`timestamp = clip_start_datetime + timedelta(seconds = frame_index / fps)`
-
-Clip start time is passed in by the operator (or inferred from filename metadata).
+3. **Event Schema Design**
+   * *What AI Suggested:* A highly normalized relational schema (separate tables for Stores, Cameras, Zones, Visitors, and Events, connected via Foreign Keys).
+   * *What I Changed:* Overridden. I implemented a single, flattened `events` table.
+   * *Why:* High-frequency time-series ingestion breaks down on edge devices if the database must execute multi-table joins and constraint checks per video frame. A flat schema optimizes for raw write speed, deferring the aggregation workload to the dashboard read queries.

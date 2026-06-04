@@ -7,6 +7,7 @@
     "lib": ["DOM", "DOM.Iterable", "ES2020"],
     "module": "ESNext",
     "skipLibCheck": true,
+    "ignoreDeprecations": "6.0",
 
     /* Bundler mode */
     "moduleResolution": "bundler",
@@ -21,7 +22,7 @@
     "noUnusedLocals": true,
     "noUnusedParameters": true,
     "noImplicitReturns": true,
-    "fallthroughCasesInSwitch": true,
+    "noFallthroughCasesInSwitch": true,
 
     /* Path Aliases mapping matching Vite configuration */
     "baseUrl": ".",
