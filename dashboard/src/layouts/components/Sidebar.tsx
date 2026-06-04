@@ -4,9 +4,7 @@ import { motion } from "framer-motion";
 import {
   LayoutDashboard,
   Map,
-  Users,
   BarChart3,
-  Activity,
   Store,
 } from "lucide-react";
 import { useAppStore } from "../../store/useAppStore";
@@ -14,9 +12,7 @@ import { useAppStore } from "../../store/useAppStore";
 const NAVIGATION = [
   { name: "Dashboard", to: "/dashboard", icon: LayoutDashboard },
   { name: "Store Map", to: "/store-map", icon: Map },
-  { name: "Visitors", to: "/visitors", icon: Users },
   { name: "Analytics", to: "/analytics", icon: BarChart3 },
-  { name: "Events", to: "/events", icon: Activity },
 ];
 
 export const Sidebar: React.FC = () => {

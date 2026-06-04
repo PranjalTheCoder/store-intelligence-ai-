@@ -1,45 +1,39 @@
-import { useQuery } from '@tanstack/react-query';
-import { StoreIntelligenceService } from '@/services/api/StoreIntelligenceService';
+import { useQuery } from "@tanstack/react-query";
+import { StoreIntelligenceService } from "@/services/api/StoreIntelligenceService";
 
-// Change this to match the store ID you are passing in your detection script
-const DEFAULT_STORE_ID = "STORE_1"; 
+const STORE_ID = "ST1076";
 
-export const useLiveMetrics = (storeId: string = DEFAULT_STORE_ID) => {
-  return useQuery({
-    queryKey: ['liveMetrics', storeId],
-    queryFn: () => StoreIntelligenceService.getMetrics(storeId),
-    refetchInterval: 5000, // Poll every 5 seconds
+export const useLiveMetrics = () =>
+  useQuery({
+    queryKey: ["metrics", STORE_ID],
+    queryFn: () => StoreIntelligenceService.getMetrics(STORE_ID),
+    refetchInterval: 5000,
   });
-};
 
-export const useLiveFunnel = (storeId: string = DEFAULT_STORE_ID) => {
-  return useQuery({
-    queryKey: ['liveFunnel', storeId],
-    queryFn: () => StoreIntelligenceService.getFunnel(storeId),
-    refetchInterval: 5000, // Poll every 5 seconds
+export const useLiveFunnel = () =>
+  useQuery({
+    queryKey: ["funnel", STORE_ID],
+    queryFn: () => StoreIntelligenceService.getFunnel(STORE_ID),
+    refetchInterval: 5000,
   });
-};
 
-export const useLiveHeatmap = (storeId: string = DEFAULT_STORE_ID) => {
-  return useQuery({
-    queryKey: ['liveHeatmap', storeId],
-    queryFn: () => StoreIntelligenceService.getHeatmap(storeId),
-    refetchInterval: 5000, // Poll every 5 seconds
+export const useLiveHeatmap = () =>
+  useQuery({
+    queryKey: ["heatmap", STORE_ID],
+    queryFn: () => StoreIntelligenceService.getHeatmap(STORE_ID),
+    refetchInterval: 5000,
   });
-};
 
-export const useLiveAnomalies = (storeId: string = DEFAULT_STORE_ID) => {
-  return useQuery({
-    queryKey: ['liveAnomalies', storeId],
-    queryFn: () => StoreIntelligenceService.getAnomalies(storeId),
-    refetchInterval: 5000, // Poll every 5 seconds
+export const useLiveAnomalies = () =>
+  useQuery({
+    queryKey: ["anomalies", STORE_ID],
+    queryFn: () => StoreIntelligenceService.getAnomalies(STORE_ID),
+    refetchInterval: 5000,
   });
-};
 
-export const useSystemHealth = () => {
-  return useQuery({
-    queryKey: ['systemHealth'],
+export const useSystemHealth = () =>
+  useQuery({
+    queryKey: ["health"],
     queryFn: () => StoreIntelligenceService.getHealth(),
-    refetchInterval: 5000, // Poll every 5 seconds
+    refetchInterval: 5000,
   });
-};

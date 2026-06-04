@@ -5,56 +5,39 @@ export const StoreIntelligenceService = {
     try {
       const { data } = await apiClient.get(`/stores/${storeId}/metrics`);
       return data ?? {};
-    } catch (error) {
+    } catch {
       return {};
     }
   },
-
   getFunnel: async (storeId: string) => {
     try {
       const { data } = await apiClient.get(`/stores/${storeId}/funnel`);
       return data ?? {};
-    } catch (error) {
+    } catch {
       return {};
     }
   },
-
   getHeatmap: async (storeId: string) => {
     try {
       const { data } = await apiClient.get(`/stores/${storeId}/heatmap`);
-      // Fallback object prevents the React Query crash
-      return (
-        data ?? {
-          store_id: storeId,
-          zones: [],
-          session_count: 0,
-          data_confidence: "LOW",
-        }
-      );
-    } catch (error) {
-      return {
-        store_id: storeId,
-        zones: [],
-        session_count: 0,
-        data_confidence: "LOW",
-      };
+      return data ?? { zones: [] };
+    } catch {
+      return { zones: [] };
     }
   },
-
   getAnomalies: async (storeId: string) => {
     try {
       const { data } = await apiClient.get(`/stores/${storeId}/anomalies`);
       return data ?? { anomalies: [] };
-    } catch (error) {
+    } catch {
       return { anomalies: [] };
     }
   },
-
   getHealth: async () => {
     try {
       const { data } = await apiClient.get("/health");
       return data ?? { status: "disconnected", stores: [] };
-    } catch (error) {
+    } catch {
       return { status: "disconnected", stores: [] };
     }
   },

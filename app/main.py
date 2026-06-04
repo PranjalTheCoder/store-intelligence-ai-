@@ -59,9 +59,11 @@ async def database_exception_handler(request: Request, exc: Exception):
         }
     )
 
+# 2. Add this exact block of code to allow your React dashboard to connect
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=["*"], # Allows all frontend ports (like 5173) to connect
+    allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
