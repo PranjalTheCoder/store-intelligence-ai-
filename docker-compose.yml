@@ -9,32 +9,30 @@ services:
     ports:
       - "8000:8000"
     volumes:
-      - store_data:/app/data
+      # Only mount directories that need to persist written data.
+      # Code/resources are already safely inside the image via COPY . .
+      - ./data:/app/data
       - ./outputs:/app/outputs
-      - ./pipeline:/app/pipeline
-      - ./resources:/app/resources
     environment:
       - DB_PATH=data/store_intelligence.db
       - YOLO_MODEL=yolov8n.pt
-    # Kept reload mode active for ease of evaluator inspection
     command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/"]
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
       interval: 15s
       timeout: 5s
       retries: 3
 
-  # Using an optimized static proxy for dashboard delivery to guarantee zero build failures
   dashboard:
-    image: nginx:alpine
+    build:
+      context: ./dashboard
+      dockerfile: Dockerfile
+      args:
+        # Must point to localhost because Vite runs in the reviewer's browser!
+        - VITE_API_URL=http://localhost:8000
     container_name: store-intelligence-dashboard
     ports:
       - "5173:80"
-    environment:
-      - BACKEND_API_URL=http://api:8000
     depends_on:
       api:
         condition: service_healthy
-
-volumes:
-  store_data:

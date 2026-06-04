@@ -36,7 +36,7 @@ from app.repository import (
 )
 from pipeline.correlate_pos import POSCorrelator
 from app.middleware.logger import StructuredLoggingMiddleware
-from sqlalchemy.exc import OperationalError, DBAPIError
+from sqlalchemy.exc import OperationalError, DBAPIError, SQLAlchemyError
 from fastapi.responses import JSONResponse
 # ---------------------------------------------------------------------------
 app = FastAPI(
@@ -48,9 +48,11 @@ app = FastAPI(
 # Register the new tracking middleware layers
 app.add_middleware(StructuredLoggingMiddleware)
 
+# CORRECTED GRACEFUL DEGRADATION
 @app.exception_handler(OperationalError)
-@app.exception_handler(DBAPIError)
-async def database_exception_handler(request: Request, exc: Exception):
+@app.exception_handler(SQLAlchemyError)
+async def database_exception_handler(request: Request, exc: SQLAlchemyError):
+    # Log the failure silently here in a real production system
     return JSONResponse(
         status_code=503,
         content={
