@@ -26,6 +26,8 @@ export default function EventsPage() {
     refetchInterval: 3000, // Poll every 3 seconds for new events
   });
 
+  const rawEvents = Array.isArray(events) ? events : [];
+
   return (
     <div className="space-y-6 h-full flex flex-col">
       {/* Header */}
@@ -80,7 +82,7 @@ export default function EventsPage() {
                 ))
             ) : (
               <AnimatePresence initial={false}>
-                {events?.map((event) => (
+                {rawEvents?.map((event) => (
                   <motion.tr
                     key={event.event_id}
                     initial={{
@@ -149,7 +151,7 @@ export default function EventsPage() {
               </AnimatePresence>
             )}
 
-            {events?.length === 0 && (
+            {rawEvents?.length === 0 && (
               <TableRow>
                 <TableCell
                   colSpan={5}

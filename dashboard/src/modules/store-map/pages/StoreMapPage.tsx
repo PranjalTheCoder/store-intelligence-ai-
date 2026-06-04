@@ -44,6 +44,11 @@ import { Button } from "@/shared/components/ui/button";
 // API & Hooks (will be swapped for real APIs)
 import { useLiveTracking } from "@/hooks/queries/useLiveQueries";
 import { useZoneAnalytics } from "@/hooks/queries/useAnalyticsQueries";
+import {
+  useLiveMetrics,
+  useLiveAnomalies,
+  useLiveHeatmap,
+} from "@/hooks/queries/useStoreQueries";
 
 // ==========================================
 // CONSTANTS
@@ -583,24 +588,41 @@ export default function StoreMapPage() {
   const panStart = useRef({ mx: 0, my: 0, px: 0, py: 0 });
   const canvasRef = useRef<HTMLDivElement>(null);
 
+  // Real-time API Polling
+  const { data: metricsData } = useLiveMetrics("STORE_1");
+  const { data: anomaliesData } = useLiveAnomalies("STORE_1");
+  const { data: heatmapData } = useLiveHeatmap("STORE_1");
+
+  // Map backend anomalies to your frontend UI array
+  const alerts = anomaliesData?.anomalies || [];
+
+  // Map backend metrics to your stats tiles
+  const totalActive = metricsData?.unique_visitors || 0;
+  const currentQueue = metricsData?.current_queue_depth || 0;
+  const overallConversion = metricsData?.conversion_rate || 0.0;
+  const abandonment = metricsData?.abandonment_rate || 0.0;
+
   // ── Data Fetching (falls back to mock) ──
+  // ✅ FIXED ORDER
   const { data: layoutRaw, isLoading: loadingLayout } = useQuery({
     queryKey: ["store-layout"],
     queryFn: async () => MOCK_LAYOUT, // swap: import { getStoreLayout } from "@/services/api"
   });
   const { data: analyticsRaw } = useZoneAnalytics();
   const { data: liveRaw } = useLiveTracking(isTrackingLive);
-  const { data: alertsRaw } = useQuery({
-    queryKey: ["system-alerts"],
-    queryFn: async () => MOCK_ALERTS, // swap: import { getAlerts } from "@/services/api"
-  });
 
+  // 1. DECLARE FALLBACKS FIRST
   const layout = layoutRaw ?? MOCK_LAYOUT;
-  const analytics = analyticsRaw ?? MOCK_ANALYTICS;
-  const visitors = liveRaw ?? (isTrackingLive ? MOCK_LIVE_VISITORS : []);
-  const alerts = alertsRaw ?? MOCK_ALERTS;
+  // Use safe array fallback for analytics to prevent .map crashes if API fails
+  const analytics = Array.isArray(analyticsRaw) ? analyticsRaw : MOCK_ANALYTICS;
+  // ✅ FIXED
+  const visitors = Array.isArray(liveRaw)
+    ? liveRaw
+    : isTrackingLive
+      ? MOCK_LIVE_VISITORS
+      : [];
 
-  // ── Derived Data ──
+  // 2. ── Derived Data (Now these can safely read 'analytics') ──
   const maxVisitors = useMemo(
     () => Math.max(...analytics.map((a) => a.visitors_count), 1),
     [analytics],
@@ -622,7 +644,7 @@ export default function StoreMapPage() {
     [analytics],
   );
 
-  const totalActive = useMemo(() => visitors.length, [visitors]);
+  // 3. Declare this LAST because it depends on topZones
   const topZone = topZones[0];
 
   // ── Pan handlers ──
@@ -899,7 +921,7 @@ export default function StoreMapPage() {
             {/* ── Live Visitor Dots ── */}
             <AnimatePresence>
               {isTrackingLive &&
-                (visitors as typeof MOCK_LIVE_VISITORS).map((v) => (
+                (Array.isArray(visitors) ? visitors : [] as typeof MOCK_LIVE_VISITORS).map((v) => (
                   <motion.div
                     key={v.visitor_id}
                     layout

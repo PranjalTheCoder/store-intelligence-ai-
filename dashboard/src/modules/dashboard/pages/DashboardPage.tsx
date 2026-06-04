@@ -805,26 +805,30 @@ export default function DashboardPage() {
                 </div>
               ) : (
                 <div className="space-y-3">
-                  {(events as typeof mockEvents).slice(0, 8).map((event) => (
-                    <div
-                      key={event.id ?? (event as any).event_id}
-                      className="flex items-center justify-between border-b border-white/5 pb-3 last:border-0"
-                    >
-                      <div className="min-w-0">
-                        <p className="truncate text-xs font-medium text-slate-200">
-                          {event.visitor_id}
-                        </p>
-                        <p className="text-[11px] text-slate-500">
-                          {new Date(event.timestamp).toLocaleTimeString([], {
-                            hour: "2-digit",
-                            minute: "2-digit",
-                          })}{" "}
-                          · {event.zone}
-                        </p>
+                  {/* {(events as typeof mockEvents || []).slice(0, 8).map((event) => ( */}
+                  // ✅ FIXED
+                  {(Array.isArray(events) ? events : [])
+                    .slice(0, 8)
+                    .map((event) => (
+                      <div
+                        key={event.id ?? (event as any).event_id}
+                        className="flex items-center justify-between border-b border-white/5 pb-3 last:border-0"
+                      >
+                        <div className="min-w-0">
+                          <p className="truncate text-xs font-medium text-slate-200">
+                            {event.visitor_id}
+                          </p>
+                          <p className="text-[11px] text-slate-500">
+                            {new Date(event.timestamp).toLocaleTimeString([], {
+                              hour: "2-digit",
+                              minute: "2-digit",
+                            })}{" "}
+                            · {event.zone}
+                          </p>
+                        </div>
+                        <EventBadge type={event.event_type} />
                       </div>
-                      <EventBadge type={event.event_type} />
-                    </div>
-                  ))}
+                    ))}
                 </div>
               )}
             </CardContent>

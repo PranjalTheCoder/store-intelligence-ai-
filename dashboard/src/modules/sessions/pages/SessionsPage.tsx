@@ -99,9 +99,11 @@ export default function SessionsPage() {
     queryFn: getSessions,
   });
 
+  const safeSessions = Array.isArray(rawSessions) ? rawSessions : [];
+
   const processedSessions = useMemo(() => {
     if (!rawSessions) return [];
-    let result = [...rawSessions];
+    let result = [...safeSessions];
 
     // Filter
     if (searchTerm) {

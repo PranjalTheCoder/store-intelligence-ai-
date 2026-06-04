@@ -6,6 +6,7 @@ import { SearchBar } from "./Searchbar";
 import { NotificationCenter } from "./Notificationcenter";
 import { UserMenu } from "./Usermenu";
 import { useLayoutStore } from "@/store/layoutStore";
+import { useSystemHealth } from "@/hooks/queries/useStoreQueries";
 
 export const Navbar = memo(function Navbar() {
   const {
@@ -16,6 +17,10 @@ export const Navbar = memo(function Navbar() {
     theme,
     setTheme,
   } = useLayoutStore();
+
+  // ... inside your Navbar component, before return:
+  const { data: healthData, isError } = useSystemHealth();
+  const isLive = healthData && !isError;
 
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
   const isDark = theme === "dark" || theme === "system";
@@ -59,22 +64,23 @@ export const Navbar = memo(function Navbar() {
       <div className="flex items-center gap-1.5 sm:gap-2">
         <SearchBar />
 
-        {/* Camera live badge */}
+        {/* Live System Health Badge */}
         <div
-          className="
+          className={`
             hidden lg:flex items-center gap-2
-            px-3 py-1.5 rounded-lg
-            bg-emerald-500/8 border border-emerald-500/15
-            text-emerald-400 text-xs font-medium
-          "
-          aria-label="Camera status: 4 cameras live"
+            px-3 py-1.5 rounded-lg border text-xs font-medium transition-colors
+            ${isLive 
+              ? "bg-emerald-500/8 border-emerald-500/15 text-emerald-400" 
+              : "bg-red-500/8 border-red-500/15 text-red-400"}
+          `}
+          aria-label={isLive ? "System Live" : "System Disconnected"}
         >
           <span className="relative flex h-2 w-2">
-            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-60" />
-            <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500" />
+            { isLive && <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-60" />}
+            <span className={`relative inline-flex h-2 w-2 rounded-full ${isLive ? 'bg-emerald-500' : 'bg-red-500'}`} />
           </span>
           <Video className="h-3.5 w-3.5" />
-          <span>4 Cameras Live</span>
+          <span>{isLive ? 'SYSTEM LIVE' : 'DISCONNECTED'}</span>
         </div>
 
         {/* Theme toggle */}
