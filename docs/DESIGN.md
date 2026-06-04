@@ -6,6 +6,54 @@ The Apex Retail Intelligence system is decoupled into two primary domains to iso
 1. **Edge Detection Pipeline (Computer Vision):** A Python worker that consumes raw video, runs object detection (YOLO) and tracking (ByteTrack), and evaluates spatial-temporal heuristics. It outputs discrete business events (e.g., `ZONE_ENTER`).
 2. **Central Intelligence API (FastAPI):** A lightweight REST API backed by a SQLite database running in Write-Ahead-Log (WAL) mode. It ingests events from the pipeline and serves aggregated metrics to the frontend dashboard.
 
+
+
+```mermaid
+graph TD
+    %% Styling
+    classDef edgeLayer fill:#1e1e2e,stroke:#89b4fa,stroke-width:2px,color:#cdd6f4;
+    classDef apiLayer fill:#11111b,stroke:#a6e3a1,stroke-width:2px,color:#cdd6f4;
+    classDef uiLayer fill:#181825,stroke:#f38ba8,stroke-width:2px,color:#cdd6f4;
+    classDef storage fill:#313244,stroke:#f9e2af,stroke-width:1px,color:#cdd6f4;
+
+    %% Edge Detection Layer
+    subgraph Edge_Pipeline ["📹 Edge Deployment (pipeline/)"]
+        A[Raw CCTV Video Feed] --> B[YOLOv8 Nano Engine]
+        B -->|Bounding Boxes| C[ByteTrack Object Tracker]
+        C -->|Spatial Polygons| D[Spatial Heuristics Engine]
+        D -->|Staff & Re-entry Filters| E[Telemetry Generator]
+    end
+    class Edge_Pipeline,A,B,C,D,E edgeLayer;
+
+    %% Ingestion Stream
+    E -->|HTTP POST / JSON Payload| F[FastAPI Ingestion Endpoint]
+
+    %% Central Intelligence API Layer
+    subgraph Cloud_API ["🧠 Central Intelligence (app/)"]
+        F -->|ASGI Async Worker| G[Pydantic Validation Layer]
+        G -->|Idempotency Check| H[SQLAlchemy Core Engine]
+        K[Analytical Aggregator] -->|Read Recharts Data| L[Metrics REST Endpoints]
+    end
+    class Cloud_API,F,G,H,K,L apiLayer;
+
+    %% Storage Layer
+    subgraph DB_Storage ["💾 Database Layer"]
+        H -->|Atomic Writes| I[(SQLite WAL Mode)]
+        I --->|Concurrent Reads| K
+    end
+    class DB_Storage,I storage;
+
+    %% Presentation Layer
+    subgraph Presentation ["💻 Presentation Layer (dashboard/)"]
+        M[React UI Client] -->|5s Polling Hook| N[TanStack Query Engine]
+        N -->|GET Request| L
+        L -->|JSON Response| M
+        M --> O[Interactive Spatial Map]
+        M --> P[Monotonic Funnel UI]
+    end
+    class Presentation,M,N,O,P uiLayer;
+```
+
 ## AI-Assisted Decisions
 
 During development, I utilized Large Language Models (LLMs) as an architectural sounding board. Here is how AI shaped the design, and where I chose to override it:
