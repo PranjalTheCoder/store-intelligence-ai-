@@ -22,7 +22,7 @@ import uuid
 from pathlib import Path
 from typing import List, Optional, Any, Dict
 
-from fastapi import FastAPI, Depends, HTTPException, Query
+from fastapi import FastAPI, Depends, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
